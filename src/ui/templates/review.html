@@ -1,53 +1,240 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Review queue</title>
 <style>
-  :root { --bg:#fff; --fg:#111; --muted:#6b7280; --line:#e5e7eb; --accent:#0f766e; --warn:#b45309; }
-  body { margin:0; font:15px/1.5 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); }
-  header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; gap:24px; align-items:baseline; }
-  h1 { font-size:17px; margin:0; font-weight:600; }
-  .counts { color:var(--muted); font-variant-numeric:tabular-nums; }
-  main { padding:20px 28px; max-width:1100px; }
-  .row { border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:12px; }
-  .narrative { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px;
-               background:#f9fafb; padding:10px; border-radius:6px; white-space:pre-wrap; }
-  mark { background:#fef3c7; padding:0 2px; }
-  .field { display:flex; gap:12px; align-items:baseline; padding:6px 0; border-top:1px solid var(--line); }
-  .key { color:var(--muted); width:230px; flex:none; }
-  .val { font-weight:500; }
-  .num { font-variant-numeric:tabular-nums; color:var(--muted); }
-  .unresolved { color:var(--warn); }
-  .why { color:var(--muted); font-size:13px; padding:2px 0 8px 242px; }
-  .why b { font-weight:600; color:var(--warn); }
-  .alts { color:var(--muted); font-size:13px; padding:0 0 6px 242px; }
-  .empty { color:var(--muted); padding:40px 0; }
+  :root {
+    --bg:#fbfbfa; --card:#fff; --fg:#1a1a19; --muted:#6f6f6a; --line:#e6e4e0;
+    --accent:#0f5f52; --accent-soft:#e8f2ef; --warn:#8a5a12; --warn-soft:#fdf5e6;
+    --in:#0f5f52; --out:#7a3030;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+
+  header { position:sticky; top:0; z-index:5; background:var(--card);
+           border-bottom:1px solid var(--line); padding:18px 32px; }
+  .bar { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; max-width:820px; margin:0 auto; }
+  h1 { font-size:19px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  .sub { color:var(--muted); font-size:14px; }
+  .progress { max-width:820px; margin:12px auto 0; height:5px; border-radius:3px;
+              background:var(--line); overflow:hidden; }
+  .progress i { display:block; height:100%; background:var(--accent); transition:width .25s; }
+
+  main { max-width:820px; margin:0 auto; padding:28px 32px 96px; }
+  .lede { color:var(--muted); font-size:15px; margin:0 0 24px; }
+
+  .txn { background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:22px 24px; margin-bottom:18px; }
+  .txn.done { opacity:.45; }
+
+  .top { display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  .who { font-weight:600; }
+  .when { color:var(--muted); font-size:14px; }
+  .amt { font-size:20px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .amt.in { color:var(--in); } .amt.out { color:var(--out); }
+  .flow { display:block; font-size:12px; font-weight:600; text-transform:uppercase;
+          letter-spacing:.06em; color:var(--muted); text-align:right; }
+
+  .banktext { margin:16px 0 4px; }
+  .banktext h3 { font-size:12px; text-transform:uppercase; letter-spacing:.07em;
+                 color:var(--muted); margin:0 0 6px; font-weight:600; }
+  .banktext p { margin:0; padding:12px 14px; background:#f5f4f1; border-radius:8px;
+                font-size:13.5px; line-height:1.6; color:#3d3d3a; word-break:break-word; }
+
+  .q { border-top:1px solid var(--line); margin-top:18px; padding-top:18px; }
+  .q h4 { margin:0 0 10px; font-size:15px; font-weight:600; }
+  .answer { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .value { font-size:17px; font-weight:600; color:var(--accent); }
+  .tag { font-size:12px; padding:3px 9px; border-radius:20px; font-weight:600;
+         background:var(--warn-soft); color:var(--warn); white-space:nowrap; }
+  .tag.ok { background:var(--accent-soft); color:var(--accent); }
+
+  .why { margin:12px 0 0; padding:12px 14px; background:var(--warn-soft);
+         border-left:3px solid var(--warn); border-radius:0 8px 8px 0;
+         font-size:14px; color:#5c4212; }
+  .why b { display:block; margin-bottom:3px; font-size:12px; text-transform:uppercase;
+           letter-spacing:.06em; }
+  .why cite { display:block; margin-top:6px; font-size:12.5px; color:var(--muted); font-style:normal; }
+
+  .actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  button { font:inherit; font-size:14.5px; font-weight:600; padding:9px 18px;
+           border-radius:8px; cursor:pointer; border:1px solid var(--line); background:var(--card);
+           color:var(--fg); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:hover { filter:brightness(.97); }
+  button:disabled { opacity:.5; cursor:default; }
+  kbd { font:inherit; font-size:11px; opacity:.65; margin-left:6px; }
+
+  .decided { margin-top:14px; font-size:14px; color:var(--accent); font-weight:600; }
+  .empty { text-align:center; padding:72px 20px; color:var(--muted); }
+  .empty strong { display:block; font-size:19px; color:var(--fg); margin-bottom:8px; }
+  footer { max-width:820px; margin:0 auto; padding:0 32px 40px; }
+  a { color:var(--accent); }
 </style>
+
 <header>
-  <h1>Review queue</h1>
-  <span class="counts">{{ counts.auto }} auto · {{ counts.remaining }} remaining · {{ counts.total }} total</span>
+  <div class="bar">
+    <h1>Transactions to check</h1>
+    <span class="sub">
+      {{ remaining }} left to check ·
+      {{ reviewed }} done ·
+      {{ confident }} of {{ total }} needed no checking
+    </span>
+  </div>
+  <div class="progress">
+    <i style="width: {{ (100 * reviewed / needs_review) if needs_review else 100 }}%"></i>
+  </div>
 </header>
+
 <main>
-  {% for row in rows %}
-    <article class="row">
-      <div class="narrative">{{ row.raw.narrative_raw }}</div>
-      {% for key, field in row.fields.items() %}
-        <div class="field">
-          <span class="key">{{ key }}</span>
-          <span class="val {{ 'unresolved' if field.status != 'auto' }}">{{ field.value or '—' }}</span>
-          <span class="num">{{ '%.2f'|format(field.confidence) }}</span>
+  <p class="lede">
+    These are the payments where the answer was not clear-cut. Everything else has been
+    filled in already. For each one below, either accept what we suggest or pick the
+    alternative.
+  </p>
+
+  {% for item in queue %}
+    {% set row = item.row %}
+    <article class="txn {{ 'done' if item.decision }}" data-row="{{ row.row_id }}">
+      <div class="top">
+        <div>
+          <span class="who">{{ row.raw.account_name }}</span><br>
+          <span class="when">{{ pretty_date(row.raw.value_date) }}</span>
         </div>
-        {% if field.status != 'auto' and field.evidence.text %}
-          <div class="why"><b>Why flagged:</b> {{ field.evidence.text }}
-            {% if field.evidence.source_list %}<i>({{ field.evidence.source_list }})</i>{% endif %}</div>
-          {% if field.alternatives %}
-            <div class="alts">Alternative:
-              {% for alt in field.alternatives %}{{ alt.value }} ({{ '%.2f'|format(alt.confidence) }}){% endfor %}
+        <div>
+          <span class="flow">{{ direction(row.raw.credit, row.raw.debit) }}</span>
+          <span class="amt {{ 'in' if (row.raw.credit or 0) > 0 else 'out' }}">
+            {{ money(row.raw.credit if row.raw.credit is not none else row.raw.debit, row.raw.currency) }}
+          </span>
+        </div>
+      </div>
+
+      <div class="banktext">
+        <h3>What the bank wrote</h3>
+        <p>{{ row.raw.narrative_raw }}</p>
+      </div>
+
+      {% for key, field in item.questions %}
+        <div class="q">
+          <h4>{{ question(key) }}</h4>
+          <div class="answer">
+            <span class="value">{{ field.value or 'No answer found' }}</span>
+            <span class="tag {{ 'ok' if field.status == 'auto' }}">{{ certainty(field.confidence, field.status) }}</span>
+          </div>
+
+          {% if field.evidence and field.evidence.text %}
+            <p class="why">
+              <b>Why we are asking</b>
+              {{ field.evidence.text }}
+              {% if field.evidence.source_list %}<cite>Source: {{ field.evidence.source_list }}</cite>{% endif %}
+            </p>
+          {% endif %}
+
+          {% if item.decision %}
+            <p class="decided">✓ You chose: {{ item.decision.value }}</p>
+          {% else %}
+            <div class="actions">
+              <button class="primary" data-choice="approve" data-field="{{ key }}"
+                      data-value="{{ field.value }}">Accept<kbd>A</kbd></button>
+              {% for alt in field.alternatives %}
+                <button data-choice="alternative" data-field="{{ key }}"
+                        data-value="{{ alt.value }}">Use “{{ alt.value }}” instead<kbd>R</kbd></button>
+              {% endfor %}
             </div>
           {% endif %}
-        {% endif %}
+        </div>
       {% endfor %}
     </article>
   {% else %}
-    <p class="empty">No rows yet. Run <code>python -m src.spine.build</code>.</p>
+    <div class="empty">
+      <strong>Nothing left to check.</strong>
+      Every transaction has either been filled in automatically or reviewed by you.
+    </div>
   {% endfor %}
 </main>
+
+<footer>
+  {% if show_all %}
+    <a href="/">Hide the ones I have already done</a>
+  {% else %}
+    <a href="/?all=1">Show everything, including what I have already done</a>
+  {% endif %}
+  &nbsp;·&nbsp;
+  <form method="post" action="/reset" style="display:inline">
+    <button style="padding:4px 10px; font-size:13px; font-weight:500">Start over</button>
+  </form>
+</footer>
+
+<script>
+  // Decisions update the page in place. Reloading after every choice throws the reviewer
+  // back to a scroll position they did not ask for, twenty-three times in a row.
+  const state = {
+    remaining: Number({{ remaining }}),
+    reviewed: Number({{ reviewed }}),
+    needsReview: Number({{ needs_review }}),
+  };
+
+  function repaintProgress() {
+    document.querySelector('.sub').textContent =
+      `${state.remaining} left to check · ${state.reviewed} done · ` +
+      `{{ confident }} of {{ total }} needed no checking`;
+    const pct = state.needsReview ? (100 * state.reviewed / state.needsReview) : 100;
+    document.querySelector('.progress i').style.width = `${pct}%`;
+    if (state.remaining === 0 && !document.querySelector('.empty')) {
+      const done = document.createElement('div');
+      done.className = 'empty';
+      done.innerHTML = '<strong>Nothing left to check.</strong>' +
+        'Every transaction has either been filled in automatically or reviewed by you.';
+      document.querySelector('main').appendChild(done);
+    }
+  }
+
+  async function send(button) {
+    const card = button.closest('.txn');
+    if (card.classList.contains('done')) return;
+    card.querySelectorAll('button').forEach((b) => (b.disabled = true));
+
+    const response = await fetch(`/rows/${card.dataset.row}/decide`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        choice: button.dataset.choice,
+        field: button.dataset.field,
+        value: button.dataset.value,
+      }),
+    });
+    if (!response.ok) {
+      card.querySelectorAll('button').forEach((b) => (b.disabled = false));
+      return;
+    }
+
+    card.classList.add('done');
+    const note = document.createElement('p');
+    note.className = 'decided';
+    note.textContent = `\u2713 You chose: ${button.dataset.value}`;
+    button.closest('.actions').replaceWith(note);
+
+    state.remaining -= 1;
+    state.reviewed += 1;
+    repaintProgress();
+
+    const next = document.querySelector('.txn:not(.done)');
+    if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-choice]');
+    if (button) send(button);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'a' && key !== 'r') return;
+    const card = document.querySelector('.txn:not(.done)');
+    if (!card) return;
+    const button = card.querySelector(`button[data-choice="${key === 'a' ? 'approve' : 'alternative'}"]`);
+    if (button) { event.preventDefault(); send(button); }
+  });
+</script>

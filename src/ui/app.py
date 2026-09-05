@@ -1,54 +1,107 @@
-"""Review queue.  W3 owns this.
+"""The review queue.
 
-The `Process` sheet in the client's own workbook is the spec: six stages, each with its
-own review check. Default view is exceptions only -- the 52 unresolved counterparties,
-the 30 rows with no project match, the 3 flagged Review. Nobody wants to scroll 100 rows.
+The reader is a fund manager, not an engineer: no field keys, no confidence floats, no
+raw currency codes reach the screen. Wording lives in `labels.py`.
 
-Run:  flask --app src.ui.app run --port 5001
+The `Process` sheet in the client's own workbook is the spec -- six stages, each with a
+review check. Rows the agent is confident about are hidden by default; what is left is
+the work.
+
+Run:  python3 serve.py
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
+
+from src.ui import labels
 
 app = Flask(__name__)
-ROWS = Path("data/rows.json")
+app.jinja_env.globals.update(
+    label=labels.label,
+    question=labels.question,
+    money=labels.money,
+    direction=labels.direction,
+    pretty_date=labels.pretty_date,
+    certainty=labels.certainty,
+)
 
-# Stage -> the fields reviewed at that stage, from the Process sheet.
-STAGES = {
-    "2. Counterparty": ["pulled_out_sender_beneficiary", "matched_legal_entity"],
-    "3. Project code": ["pulled_out_project_code", "matched_project_code"],
-    "4. Classification": ["matched_sender_beneficiary", "classification", "counterparty_transtype", "cash_leg_transtype"],
-    "5. Position": ["resolved_deal", "resolved_position"],
-}
+ROWS = Path("data/rows.json")
+DECISIONS = Path("data/decisions.json")
 
 
 def load_rows() -> list[dict]:
-    if not ROWS.exists():
-        return []
-    return json.loads(ROWS.read_text())
+    return json.loads(ROWS.read_text()) if ROWS.exists() else []
 
 
-def needs_attention(row: dict) -> bool:
-    return any(f.get("status") != "auto" for f in row.get("fields", {}).values())
+def load_decisions() -> dict[str, dict]:
+    return json.loads(DECISIONS.read_text()) if DECISIONS.exists() else {}
+
+
+def save_decisions(decisions: dict[str, dict]) -> None:
+    DECISIONS.parent.mkdir(parents=True, exist_ok=True)
+    DECISIONS.write_text(json.dumps(decisions, indent=2))
+
+
+def open_questions(row: dict) -> list[tuple[str, dict]]:
+    """The fields on this row that still need a human. Order follows the Process sheet."""
+    return [(key, f) for key, f in row.get("fields", {}).items() if f.get("status") != "auto"]
 
 
 @app.get("/")
 def index():
     rows = load_rows()
-    exceptions_only = request.args.get("all") != "1"
-    shown = [r for r in rows if needs_attention(r)] if exceptions_only else rows
-    counts = {
-        "auto": sum(1 for r in rows if not needs_attention(r)),
-        "remaining": sum(1 for r in rows if needs_attention(r)),
-        "total": len(rows),
-    }
-    return render_template("review.html", rows=shown, counts=counts, stages=STAGES)
+    decisions = load_decisions()
+    show_all = request.args.get("all") == "1"
+
+    queue, done = [], 0
+    for row in rows:
+        questions = open_questions(row)
+        settled = str(row["row_id"]) in decisions
+        if settled:
+            done += 1
+        if not questions:
+            continue
+        if settled and not show_all:
+            continue
+        queue.append({"row": row, "questions": questions, "decision": decisions.get(str(row["row_id"]))})
+
+    needs_review = sum(1 for r in rows if open_questions(r))
+    return render_template(
+        "review.html",
+        queue=queue,
+        show_all=show_all,
+        total=len(rows),
+        needs_review=needs_review,
+        reviewed=done,
+        remaining=needs_review - done,
+        confident=len(rows) - needs_review,
+    )
 
 
 @app.post("/rows/<int:row_id>/decide")
 def decide(row_id: int):
-    """Record approve / reject / correct. W3: persist to data/decisions.json."""
-    return jsonify({"row_id": row_id, "ok": False, "error": "not implemented"}), 501
+    payload = request.get_json(silent=True) or request.form
+    choice = payload.get("choice")
+    if choice not in {"approve", "alternative"}:
+        return jsonify({"error": "choice must be 'approve' or 'alternative'"}), 400
+
+    decisions = load_decisions()
+    decisions[str(row_id)] = {
+        "choice": choice,
+        "field": payload.get("field"),
+        "value": payload.get("value"),
+    }
+    save_decisions(decisions)
+
+    if request.is_json:
+        return jsonify({"row_id": row_id, "choice": choice, "reviewed": len(decisions)})
+    return redirect(url_for("index"))
+
+
+@app.post("/reset")
+def reset():
+    save_decisions({})
+    return redirect(url_for("index"))
