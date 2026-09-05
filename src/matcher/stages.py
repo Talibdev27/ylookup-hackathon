@@ -538,10 +538,105 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
     )
 
 
+def _security_kind(narrative: str) -> str | None:
+    """Equity or funding loan, as the bank describes the purchase.
+
+    `ACQ 100PER OF SHARES IN ...` buys equity. `PURCHAS 100PER OF LOAN PRINCIP` and
+    `PURCHASE 100PER OF ACC INT` -- accrued interest -- are both the loan.
+    """
+    text = " ".join(narrative.upper().split())
+    if "EQUITY:" in text or "SHARES" in text or "SHARE " in text:
+        return "Equity"
+    if "LOAN" in text or "PRINCIP" in text or "ACC INT" in text:
+        return "Funding loan"
+    return None
+
+
 def resolved_position(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 5. Position under the deal, from a 6,637-row master. Investments only --
-    filled on 30 of 100 rows."""
-    raise NotImplementedError("W2")
+    """Stage 5. Which position under the deal, from the same 6,635-row master.
+
+    Reads the deal the stage before it settled, then narrows the master's rows three ways:
+    the legal entity whose statement this is, whether the bank bought equity or loan, and
+    the project named in the position text.
+
+    That leaves exactly one position on 13 of the 30 rows. On 12 more it leaves two or
+    four, and the answer is genuinely not in the bank text: `Cephalus Biogas 001 Limited -
+    EUR (Halstead (Equity))` and `... (Equity)` are both real positions under the same
+    deal, held by the same legal entity, for the same kind of security, and nothing in the
+    narrative says Halstead. Those rows get every candidate under the human's own heading,
+    `Review - multiple positions:`, which is what their working file says when the same
+    thing happened to them.
+    """
+    deal = row.fields.get("resolved_deal")
+    if not deal or not deal.value:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text="there is no deal to find a position under",
+                source_list="Deal & Position Master List",
+            ),
+        )
+
+    wanted = set(deal.value.split(JOIN))
+    candidates = [d for d in lists.deals if d.get("Deal Name") in wanted]
+
+    entity = row.fields.get("matched_legal_entity")
+    if entity and entity.value:
+        mine = counterparty.fold_legal_form(entity.value)
+        candidates = [
+            d for d in candidates if counterparty.fold_legal_form(d.get("Legal Entity", "")) == mine
+        ] or candidates
+
+    kind = _security_kind(row.raw.narrative_raw)
+    if kind:
+        candidates = [
+            d for d in candidates if d.get("Security Type", "").lower() == kind.lower()
+        ] or candidates
+
+    project = row.fields.get("matched_project_code")
+    named = project.value if project and project.value else ""
+    if named and not named.startswith(NOT_A_PROJECT):
+        target = counterparty.fold(named)
+        candidates = [
+            d for d in candidates if f" {target} " in f" {counterparty.fold(d.get('Position', ''))} "
+        ] or candidates
+
+    positions = sorted({d["Position"] for d in candidates if d.get("Position")})
+    if not positions:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text=f"the deal master holds no position under {deal.value!r}",
+                source_list="Deal & Position Master List",
+            ),
+        )
+    if len(positions) > 1:
+        return Field(
+            value=MANY + JOIN.join(positions),
+            confidence=0.4,
+            status="needs_review",
+            evidence=Evidence(
+                text=(
+                    f"{len(positions)} positions under this deal fit equally well, and the "
+                    "bank text does not say which"
+                ),
+                source_list="Deal & Position Master List",
+            ),
+            alternatives=[Alternative(value=p, confidence=0.4) for p in positions[:4]],
+        )
+    return Field(
+        value=positions[0],
+        confidence=0.8,
+        status="auto",
+        evidence=Evidence(
+            text="the only position under this deal that fits this payment",
+            source_list="Deal & Position Master List",
+        ),
+    )
 
 
 def pulled_out_project_code(row: Row, lists: ReferenceLists) -> Field:
@@ -698,10 +793,142 @@ def counterparty_transtype(row: Row, lists: ReferenceLists) -> Field:
     )
 
 
+# Only an investment has a deal behind it. Measured on the ground truth: every one of the
+# 30 rows carrying a deal is classified one of these two, and only one row classified this
+# way carries no deal.
+INVESTMENT_KINDS = {"Investment", "Investment Transfer"}
+
+# The human's own wording when more than one row of the master fits. Reproduced rather
+# than invented: it is what their working file says, and the review queue reads it.
+MANY = "Review - multiple positions: "
+JOIN = " | "
+
+# Bookkeeping words that are not a project name.
+NOT_A_PROJECT = ("Flag", "OH -", "OVERHEAD")
+
+
+def _deals_named(name: str, currency: str, deal_names: list[str]) -> list[str]:
+    """Deals whose name is this entity, preferring the one held in this row's currency."""
+    if not name:
+        return []
+    target = counterparty.fold_legal_form(name)
+    exact = [d for d in deal_names if counterparty.fold_legal_form(d) == target]
+    if exact:
+        return exact[:1]
+    tagged = [d for d in deal_names if counterparty.fold_legal_form(d) == f"{target} {currency}"]
+    if tagged:
+        return tagged[:1]
+    opened = sorted((d for d in deal_names if counterparty.fold_legal_form(d).startswith(target + " ")), key=len)
+    return opened[:1]
+
+
+def _deals_for_project(project: str, currency: str, lists: ReferenceLists) -> list[str]:
+    """Every deal financing this project, preferring the ones held in this row's currency.
+
+    More than one is a real answer here: a project financed through four holding vehicles
+    has four deals, and the human joined them rather than picking one.
+
+    The deal is not always named after the project. `Azurite Array` is financed through
+    `NI V Azurite HoldCo Limited`, which does not carry the project's full name -- but the
+    positions underneath it do, so the position text is searched when the deal names come
+    back empty.
+    """
+    if not project or project.startswith(NOT_A_PROJECT):
+        return []
+    target = counterparty.fold(project)
+
+    def in_currency(names: list[str]) -> list[str]:
+        tagged = [d for d in names if counterparty.fold(d).endswith(f" {currency}")]
+        return sorted(tagged or names)
+
+    named = [d for d in lists.deal_names if f" {target} " in f" {counterparty.fold(d)} "]
+    if named:
+        return in_currency(named)
+    held = {
+        row["Deal Name"]
+        for row in lists.deals
+        if row.get("Deal Name")
+        and f" {target} " in f" {counterparty.fold(row.get('Position', ''))} "
+    }
+    return in_currency(sorted(held))
+
+
 def resolved_deal(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 5. The deal a position sits under. Filled on 30 of 100 rows, and falls out
-    of resolved_position -- the deal master carries both columns on one row."""
-    raise NotImplementedError("W2")
+    """Stage 5. The deal this transaction sits under, from the 6,635-row deal master.
+
+    Filled on 30 of 100 rows, and the gate is what makes it tractable: every row the human
+    gave a deal is one we classify `Investment` or `Investment Transfer`, and only one row
+    we classify that way has no deal. Everything else -- a bank fee, an internal transfer,
+    a supplier payment -- has no deal because there is no investment behind it, so this
+    stage says nothing rather than reaching for the nearest name.
+
+    Which name to look up depends on which kind it is, and the two are not interchangeable:
+
+    * An `Investment` is money moving into a holding company, and that company is the deal.
+      So the counterparty is the lookup.
+    * An `Investment Transfer` is money moving between two of the fund's own vehicles to
+      fund a project. The vehicles are not the deal; the project is.
+    """
+    kind = row.fields.get("classification")
+    if not kind or kind.value not in INVESTMENT_KINDS:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text="this is not an investment, so there is no deal behind it",
+                source_list="Deal & Position Master List",
+            ),
+        )
+
+    counterpart = row.fields.get("matched_sender_beneficiary")
+    project = row.fields.get("matched_project_code")
+    who = counterpart.value if counterpart else None
+    what = project.value if project else None
+    currency = row.raw.currency
+
+    if kind.value == "Investment":
+        # Without a counterparty there is nothing to look up: the project alone names the
+        # deals of every vehicle financing it, which is a list rather than an answer.
+        found = _deals_named(who, currency, lists.deal_names) if who else []
+        reason = f"{who!r} is a deal in the master list" if found else ""
+    else:
+        found = _deals_for_project(what, currency, lists)
+        reason = f"the money was moved to fund {what!r}" if found else ""
+        if not found and who:
+            found = _deals_named(who, currency, lists.deal_names)
+            reason = f"{who!r} is a deal in the master list" if found else ""
+
+    if not found:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text="we could not tell which deal this belongs to",
+                source_list="Deal & Position Master List",
+            ),
+        )
+    if len(found) > 1:
+        return Field(
+            value=JOIN.join(found),
+            confidence=0.5,
+            status="needs_review",
+            evidence=Evidence(
+                text=(
+                    f"{what!r} is financed through {len(found)} vehicles, so somebody has "
+                    "to say which of them this payment belongs to"
+                ),
+                source_list="Deal & Position Master List",
+            ),
+            alternatives=[Alternative(value=d, confidence=0.5) for d in found[:4]],
+        )
+    return Field(
+        value=found[0],
+        confidence=0.85,
+        status="auto",
+        evidence=Evidence(text=reason, source_list="Deal & Position Master List"),
+    )
 
 
 # The stages in the order the Process sheet runs them. This list is the registry: adding

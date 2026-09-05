@@ -22,10 +22,8 @@ def test_running_the_sample_workspace() -> None:
     assert result.rows == 100
     assert result.sheets == 15
     assert result.stages_total == 10
-    assert set(result.unwritten) == {
-        "resolved_deal",
-        "resolved_position",
-    }, "the columns still to be written -- naming them says which, where a count did not"
+    assert not result.unwritten, "every column has a stage now; a name here is a regression"
+    assert result.stages_applied == result.stages_total
     assert result.ok, f"stages failed: {dict(result.failures)}"
 
     rows = json.loads(pipeline.ROWS.read_text())
