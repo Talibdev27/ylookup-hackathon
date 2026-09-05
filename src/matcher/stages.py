@@ -231,7 +231,11 @@ def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
 
 # The bank names a project in the clear: "... TO NI V AZURITE HOLDCO LTD. PROJECT AZURITE."
 # Everything up to the full stop is the name; the sentence after it is the amount.
-PROJECT_NAMED = re.compile(r"PROJECT[:\s]+([A-Z0-9][A-Z0-9\- ]*)")
+#
+# The comma is allowed after the keyword because the bank wraps lines mid-phrase and puts
+# one at the wrap point, so `PROJECT, RANFJORD II.` is one phrase broken across two lines
+# rather than a project called nothing followed by a separate fragment.
+PROJECT_NAMED = re.compile(r"PROJECT[:,\s]+([A-Z0-9][A-Z0-9\- ]*)")
 
 # Overhead codes the bank's own wording settles, before any lookup happens. These are 31
 # of the 100 rows and none of them names a project, because there is no project: the

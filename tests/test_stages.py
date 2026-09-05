@@ -197,6 +197,16 @@ def test_matched_project_code_recovers_the_reports_own_spelling() -> None:
     assert stages.matched_project_code(row, PROJECTS).value == "Azurite Array"
 
 
+def test_a_project_named_across_a_line_break_is_still_named() -> None:
+    """The bank wraps mid-phrase and leaves a comma at the wrap point, so `PROJECT,
+    RANFJORD II.` is one phrase broken in two rather than a project called nothing."""
+    row = a_row(narrative_raw="NI RANFJORD II SCSP, 25515MS49ERZ, EQUITY: ... PROJECT, RANFJORD II.")
+    lists = ReferenceLists(project_codes=[{"Project Code": "Ranfjord"},
+                                          {"Project Code": "Ranfjord II"}])
+    assert stages.pulled_out_project_code(row, lists).value == "RANFJORD II"
+    assert stages.matched_project_code(row, lists).value == "Ranfjord II", "not the shorter Ranfjord"
+
+
 def test_a_bank_fee_books_to_overhead_without_a_lookup() -> None:
     """31 rows have no project because the counterparty is the bank itself."""
     row = a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT")
