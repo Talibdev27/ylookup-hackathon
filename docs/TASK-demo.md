@@ -59,7 +59,9 @@ something different, that is a quiet mark against you. As of 5 September:
 - **88 of 100** rows come back for checking; **12** needed none
 - **23** rows carry the cash-leg contradiction
 - `matched_legal_entity` **100/100** · `cash_leg_transtype` **100/100**
-- `matched_sender_beneficiary` **31** of the 48 the human matched, plus **8 they left blank**
+- **Counterparty** — the hardest column — **45** of the 48 the human matched, plus **8 they
+  left blank**, and **zero disagreements**: the three it does not reproduce, it declines
+- **Seven** disagreements across all ten columns put together
 
 ---
 
@@ -132,31 +134,35 @@ verbatim. This is the most important fifteen seconds of the video — slow down.
 
 ### 2:35–3:20 · Three: a person clears it in seconds
 
-Scroll down to the **sixth card** — *NORDVIK I.A.B. FUND I … PROJECT CEPHALUS*, **money in,
-€4,232,000**. It is the one where every question has an answer. Use this card, not another.
+Scroll to the **fourth card** — *NORDVIK INFRASTRUCTURE ADVANCED, INTERNAL TRANSFER*, money
+in, **€6,550,000**. Use this card. It carries every claim the product makes, on one screen,
+with no scrolling.
 
-> "Here is the ordinary case. Three questions, three proposals, every one with its reason."
+> "Here is the ordinary case."
 
-Walk the three, quickly:
+**Who was this actually paid to** proposes `Nordvik Infrastructure Advanced Bioenergy Fund
+II SCSp`, *fairly confident*, because the bank text names 'NORDVIK INFRASTRUCTURE ADVANCED'.
+Open the alternatives and let the judges see them — **three near-identical fund names**,
+differing only by suffix: *Fund I SCSp*, *Fund I DK A K/S*, *Fund II QFPF SCSp*.
 
-1. **Who was this paid to** → `NI ABF II Co-Invest SCSp`, *fairly confident*, because the
-   bank text names 'NI ABF II SCSP'.
-2. **The cash side** → the same flag as before.
-3. **Which position** → two positions fit equally well, so it offers both rather than
-   guessing.
+> "The bank wrote one name. Four funds in their own list start with it, and they differ by a
+> suffix. It picks the closest, shows the reason, and puts the other three one keypress
+> away — because this is exactly the call a person should be making, not a machine."
 
 Then use the keyboard, deliberately, one key at a time:
 
-> "Accept — A." *(press A)*
-> "Or take the alternative it offered — R." *(press R)*
-> "Or type your own, and it suggests from their own reference lists." *(press E, type a few
-> letters, show the suggestions)*
+> "Accept — `A`." *(press A)*
+> "Or take one of the alternatives — `R`." *(press R)*
+> "Or type your own, and it suggests from their own reference lists — `E`." *(press E, type a
+> few letters, show the suggestions)*
 
-Then find a card with no answer and press **U**.
+Now point at the three questions on the same card reading **"Could not work this out"** —
+no project named in the text, so no deal, so no position — and press `U` on one.
 
-> "And this one. It cannot tell. So it says so — 'I can't tell either' is a real answer you
-> can record. That matters more than it sounds: a confident wrong number is the thing that
-> made him stop reading what they send."
+> "And these it cannot answer. The bank text names no project, so there is no deal, so there
+> is no position. It says so, and 'I can't tell either' is a real answer you can record.
+> That matters more than it sounds: a confident wrong number is the thing that made him stop
+> reading what they send."
 
 Hit **Download as a spreadsheet**, open it, point at the column saying who decided each
 answer.
@@ -168,8 +174,10 @@ answer.
 Cut to the terminal, `./run.sh`.
 
 > "Two columns match the human exactly, a hundred out of a hundred. The counterparty column
-> agrees on thirty-one and resolves eight more they'd left blank. The rest is in the queue,
-> where somebody can see it — instead of blank in a spreadsheet nobody reads."
+> — the one they gave up on fifty-two times — agrees with them on forty-five, resolves eight
+> they left blank, and disagrees on nothing. Seven disagreements across all ten columns.
+> Everything we are unsure about is in the queue, where somebody can see it — instead of
+> blank in a spreadsheet nobody reads."
 
 Stop there. Do not add a features list.
 
