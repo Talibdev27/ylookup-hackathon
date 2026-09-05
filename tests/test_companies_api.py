@@ -66,6 +66,28 @@ def test_unknown_company_id_is_a_404_not_a_crash() -> None:
         assert response.status_code == 404
 
 
+def test_review_scoped_per_company_sums_to_the_whole_dataset() -> None:
+    """Every transaction belongs to exactly one company, so filtering /api/review by
+    each company id in turn and summing the counts must reproduce the unfiltered total --
+    otherwise a row is either double-counted or has fallen through the filter."""
+    client = _client()
+    whole = client.get("/api/review?all=1").get_json()
+    companies = client.get("/api/companies").get_json()["companies"]
+
+    total = 0
+    for company in companies:
+        scoped = client.get(f"/api/review?all=1&company={company['id']}").get_json()
+        total += len(scoped["items"])
+        for item in scoped["items"]:
+            assert item["transaction"]["row_id"] is not None
+    assert total == len(whole["items"])
+
+
+def test_review_rejects_an_unknown_company() -> None:
+    response = _client().get("/api/review?company=not-a-real-company")
+    assert response.status_code == 404
+
+
 def test_api_routes_carry_cors_headers_but_pages_do_not() -> None:
     """The frontend runs on a different origin -- see app.py's after_request hook.
     Server-rendered pages are navigated to directly and never fetched cross-origin."""
@@ -82,5 +104,7 @@ if __name__ == "__main__":
     test_income_statement_for_a_real_company()
     test_cash_flow_is_honest_about_not_being_available()
     test_unknown_company_id_is_a_404_not_a_crash()
+    test_review_scoped_per_company_sums_to_the_whole_dataset()
+    test_review_rejects_an_unknown_company()
     test_api_routes_carry_cors_headers_but_pages_do_not()
     print("all companies API checks pass")

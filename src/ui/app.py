@@ -220,9 +220,27 @@ def _public_check_status(report: dict) -> dict:
     }
 
 
-def review_state(show_all: bool = False) -> dict:
-    """One queue and one set of counts for matcher questions and check findings."""
+def _matched_entity(row: dict) -> str | None:
+    """The matcher's resolved fund name for this row, `auto` or not.
+
+    `matcher_questions` in the public API only carries non-auto fields, and
+    `matched_legal_entity` is auto on the bundled sample every time -- 100/100 -- so it
+    never appears there. Filtering by company needs the value regardless of status.
+    """
+    field = row.get("fields", {}).get("matched_legal_entity") or {}
+    return field.get("value")
+
+
+def review_state(show_all: bool = False, legal_entity: str | None = None) -> dict:
+    """One queue and one set of counts for matcher questions and check findings.
+
+    `legal_entity`, when given, scopes everything -- queue, unattached flags, and the
+    summary counts -- to one fund's transactions. None means the whole dataset, which is
+    what the server-rendered page at `/` always shows.
+    """
     rows = load_rows()
+    if legal_entity:
+        rows = [row for row in rows if _matched_entity(row) == legal_entity]
     decisions = load_decisions()
     report = load_flag_report()
     flags = report.get("flags") or []
@@ -233,12 +251,17 @@ def review_state(show_all: bool = False) -> dict:
     known_rows = {str(row["row_id"]) for row in rows}
     for flag in flags:
         row_id = (flag.get("source") or {}).get("row_id")
-        if row_id is None or str(row_id) not in known_rows:
-            decision = flag_decisions.get(flag.get("flag_id", ""))
-            if show_all or not decision:
-                unattached.append(_public_flag(flag, decision))
-        else:
-            by_row.setdefault(str(row_id), []).append(flag)
+        row_id_str = str(row_id) if row_id is not None else None
+        if row_id_str is not None and row_id_str in known_rows:
+            by_row.setdefault(row_id_str, []).append(flag)
+            continue
+        if row_id_str is not None and legal_entity:
+            # A real finding, just on a different company's transaction -- not this
+            # view's business, unattached or not.
+            continue
+        decision = flag_decisions.get(flag.get("flag_id", ""))
+        if show_all or not decision:
+            unattached.append(_public_flag(flag, decision))
 
     queue = []
     for row in rows:
@@ -337,8 +360,16 @@ def index():
 
 @app.get("/api/review")
 def api_review():
-    """Stable Stage D data for a separate frontend, without server filesystem paths."""
-    state = review_state(request.args.get("all") == "1")
+    """Stable Stage D data for a separate frontend, without server filesystem paths.
+
+    `?company=<id>` scopes the queue to one fund -- the same ids `/api/companies`
+    returns -- for a per-company review tab. Omitted, this is the whole dataset.
+    """
+    company_id = request.args.get("company")
+    legal_entity = _entities_by_slug().get(company_id) if company_id else None
+    if company_id and not legal_entity:
+        return jsonify({"error": f"no company {company_id!r}"}), 404
+    state = review_state(request.args.get("all") == "1", legal_entity=legal_entity)
     items = []
     for entry in state["queue"]:
         row = entry["row"]
