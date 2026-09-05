@@ -63,3 +63,46 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
     print("all pipeline checks pass")
+
+
+def test_a_row_can_answer_more_than_one_question() -> None:
+    """21 of the rows in the queue ask two questions. Decisions were first keyed by row
+    alone, so answering the second silently overwrote the answer to the first."""
+    from src.ui import app
+
+    app.DECISIONS.unlink(missing_ok=True)
+    client = app.app.test_client()
+
+    for field, choice, value in [
+        ("matched_sender_beneficiary", "manual", "NIP P/S"),
+        ("cash_leg_transtype", "approve", "Cash - Disbursed - EUR"),
+    ]:
+        response = client.post(
+            "/rows/1/decide", json={"choice": choice, "field": field, "value": value}
+        )
+        assert response.status_code == 200, response.get_json()
+
+    answered = app.load_decisions()["1"]
+    assert answered["matched_sender_beneficiary"]["value"] == "NIP P/S"
+    assert answered["cash_leg_transtype"]["choice"] == "approve"
+    app.DECISIONS.unlink(missing_ok=True)
+
+
+def test_a_correction_needs_a_value_but_giving_up_does_not() -> None:
+    """"I can't tell either" is a real answer -- without it the row never leaves the
+    queue. An empty typed correction is not."""
+    from src.ui import app
+
+    app.DECISIONS.unlink(missing_ok=True)
+    client = app.app.test_client()
+
+    blank = client.post("/rows/2/decide", json={"choice": "manual", "field": "x", "value": "   "})
+    assert blank.status_code == 400
+
+    gave_up = client.post("/rows/2/decide", json={"choice": "unresolved", "field": "x"})
+    assert gave_up.status_code == 200
+    assert app.load_decisions()["2"]["x"]["choice"] == "unresolved"
+
+    unnamed = client.post("/rows/2/decide", json={"choice": "approve", "value": "y"})
+    assert unnamed.status_code == 400, "a decision must say which field it answers"
+    app.DECISIONS.unlink(missing_ok=True)

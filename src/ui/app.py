@@ -48,7 +48,12 @@ def load_rows() -> list[dict]:
     return json.loads(ROWS.read_text()) if ROWS.exists() else []
 
 
-def load_decisions() -> dict[str, dict]:
+def load_decisions() -> dict[str, dict[str, dict]]:
+    """Decisions, keyed by row and then by field.
+
+    Keyed by row alone at first, which was wrong: 21 of the 72 rows in the queue ask more
+    than one question, so answering the second overwrote the answer to the first.
+    """
     return json.loads(DECISIONS.read_text()) if DECISIONS.exists() else {}
 
 
@@ -62,6 +67,26 @@ def open_questions(row: dict) -> list[tuple[str, dict]]:
     return [(key, f) for key, f in row.get("fields", {}).items() if f.get("status") != "auto"]
 
 
+def counterparty_suggestions() -> list[str]:
+    """Every name a counterparty could legitimately be.
+
+    A reviewer correcting a row should be choosing a real entry from their own reference
+    lists, not typing free text that will never resolve. Free text is still allowed --
+    they may know something the lists do not -- but the offered options are real.
+    """
+    from src.matcher.reference import ReferenceLists
+    from src.spine.build import load_workbook
+
+    try:
+        lists = ReferenceLists.from_workbook(load_workbook())
+    except SystemExit:
+        return []
+    names: set[str] = set()
+    for _, entries in lists.counterparty_lists():
+        names.update(entries)
+    return sorted(names)
+
+
 @app.get("/")
 def index():
     rows = load_rows()
@@ -71,14 +96,15 @@ def index():
     queue, done = [], 0
     for row in rows:
         questions = open_questions(row)
-        settled = str(row["row_id"]) in decisions
-        if settled:
-            done += 1
         if not questions:
             continue
-        if settled and not show_all:
-            continue
-        queue.append({"row": row, "questions": questions, "decision": decisions.get(str(row["row_id"]))})
+        answered = decisions.get(str(row["row_id"]), {})
+        settled = all(key in answered for key, _ in questions)
+        if settled:
+            done += 1
+            if not show_all:
+                continue
+        queue.append({"row": row, "questions": questions, "answered": answered})
 
     needs_review = sum(1 for r in rows if open_questions(r))
     return render_template(
@@ -91,6 +117,7 @@ def index():
         remaining=needs_review - done,
         confident=len(rows) - needs_review,
         space=workspace.current(),
+        suggestions=counterparty_suggestions(),
     )
 
 
@@ -98,19 +125,28 @@ def index():
 def decide(row_id: int):
     payload = request.get_json(silent=True) or request.form
     choice = payload.get("choice")
-    if choice not in {"approve", "alternative"}:
-        return jsonify({"error": "choice must be 'approve' or 'alternative'"}), 400
+    if choice not in {"approve", "alternative", "manual", "unresolved"}:
+        return jsonify({"error": f"unknown choice {choice!r}"}), 400
+
+    value = (payload.get("value") or "").strip()
+    if choice == "manual" and not value:
+        return jsonify({"error": "a correction needs a value"}), 400
+    if choice == "unresolved":
+        # The reviewer could not work it out either. That is a real answer and it has to
+        # be recordable -- otherwise the row sits in the queue forever and the count
+        # never reaches zero.
+        value = ""
+
+    field = payload.get("field")
+    if not field:
+        return jsonify({"error": "a decision has to say which field it answers"}), 400
 
     decisions = load_decisions()
-    decisions[str(row_id)] = {
-        "choice": choice,
-        "field": payload.get("field"),
-        "value": payload.get("value"),
-    }
+    decisions.setdefault(str(row_id), {})[field] = {"choice": choice, "value": value}
     save_decisions(decisions)
 
     if request.is_json:
-        return jsonify({"row_id": row_id, "choice": choice, "reviewed": len(decisions)})
+        return jsonify({"row_id": row_id, "field": field, "choice": choice})
     return redirect(url_for("index"))
 
 
