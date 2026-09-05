@@ -102,15 +102,21 @@ def extract(narrative: str) -> tuple[str, tuple[int, int]] | None:
 
 
 def complete(fragment: str, narrative: str) -> str:
-    """Recover a name the bank truncated at a line break.
+    """Recover a name the bank truncated, when a longer comma-fragment spells it out.
 
-    `NI ABF II MIZARCO S.A R.` is cut off at a line break, but the full form
-    `NI ABF II MIZARCO S.A R.L.` appears later in the same narrative.
+    Only whole fragments are considered, and this is a deliberate limit rather than an
+    oversight. Two looser versions were measured against the 55 names the human pulled
+    by hand:
 
-    Only whole comma-fragments are considered as completions. An earlier version scanned
-    every word window instead, which technically found the full form and then kept going:
-    each longer window still started with the fragment, so it returned half the sentence.
-    Extraction dropped from 34 exact matches to 7.
+      whole fragments only          37 / 55
+      any word window               17 / 55   (over-extends: every longer window still
+                                               starts with the fragment)
+      word windows stopped at a
+      noise word                     7 / 55   (worse again -- stops in the wrong places)
+
+    So `NI ABF II MIZARCO S.A R.` stays truncated when its full form only appears
+    mid-fragment. Three rows lose their completion; twenty rows keep a correct name.
+    That trade is why the loose versions are not here.
     """
     fragment = tidy(fragment)
     folded = fold(fragment)
@@ -119,9 +125,7 @@ def complete(fragment: str, narrative: str) -> str:
     longest = fragment
     for candidate in re.split(r"[,;]", narrative):
         candidate = tidy(candidate)
-        if len(candidate) <= len(longest):
-            continue
-        if fold(candidate).startswith(folded):
+        if len(candidate) > len(longest) and fold(candidate).startswith(folded):
             longest = candidate
     return longest
 

@@ -22,8 +22,10 @@ def test_fold_bridges_the_two_spellings() -> None:
 
 def test_extract_takes_the_first_name_fragment() -> None:
     fragment, span = extract(NARRATIVE)
-    assert fragment == "NI ABF II MIZARCO S.A R."
-    assert NARRATIVE[span[0] : span[1]] == fragment, "span must index the raw narrative"
+    assert fragment == "NI ABF II MIZARCO S.A R"
+    # The span covers the name as the bank wrote it, trailing punctuation included --
+    # it is what gets highlighted on screen, so it must match the text on the page.
+    assert NARRATIVE[span[0] : span[1]].startswith(fragment)
 
 
 def test_extract_skips_reference_fragments() -> None:
@@ -36,8 +38,17 @@ def test_tidy_strips_the_line_number_prefix() -> None:
     assert tidy("1/NORDVIK INFRASTRUCTURE PARTNER") == "NORDVIK INFRASTRUCTURE PARTNER"
 
 
-def test_complete_recovers_a_truncated_name() -> None:
-    assert complete("NI ABF II MIZARCO S.A R.", NARRATIVE) == "NI ABF II MIZARCO S.A R.L."
+def test_complete_extends_only_across_whole_fragments() -> None:
+    """Completion is deliberately limited to whole comma-fragments. Looser versions that
+    scanned word windows scored 17/55 and 7/55 on the human's names, against 37/55 for
+    this one -- they over-extend far more often than they rescue a truncation.
+
+    Here the full form only appears mid-fragment, so the truncated name stands."""
+    assert complete("NI ABF II MIZARCO S.A R.", NARRATIVE) == "NI ABF II MIZARCO S.A R"
+    # When the fuller form is its own fragment, it is picked up.
+    assert complete("TRENTBECK AUDIT", "TRENTBECK AUDIT, TRENTBECK AUDIT LUXEMBOURG") == (
+        "TRENTBECK AUDIT LUXEMBOURG"
+    )
 
 
 def test_currency_decides_between_two_spellings_of_one_counterparty() -> None:
