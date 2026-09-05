@@ -117,7 +117,8 @@ readable at 720p.
    needs a step the README does not mention is a bug — the judges said the minimum bar is a
    README plus one command they can execute.
 2. Put today's real scoreboard in it.
-3. Add the demo video link at the top.
+3. Add the demo video link. The README's **Try it** section already carries the live URL
+   and today's scoreboard; add a `- **Video:** <link>` bullet directly under the Live one.
 
 **Done when** someone who has never seen the repo can go from `git clone` to a running
 review queue using only the README.
@@ -128,12 +129,13 @@ review queue using only the README.
 
 Three things, per the brief: the Tally form, a **public** GitHub repo, and the video.
 
-```bash
-gh repo edit Talibdev27/ylookup-hackathon --visibility public
-```
+**The repo is already public** — verified 5 September. Check it still is, from a logged-out
+browser window, before you submit: the code review is scored from it, and a private repo
+scores zero on that 25%.
 
-**The repo is private right now.** It has to be public at submission — the code review is
-scored from it, and a private repo scores zero on that 25%.
+```bash
+gh repo view Talibdev27/ylookup-hackathon --json visibility
+```
 
 Deadline is **Sunday 12:00**, and resubmission is allowed. Submit a working version at
 **11:00** and improve it after if there is time; there is no reason to be submitting at

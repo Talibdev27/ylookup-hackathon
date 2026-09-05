@@ -10,9 +10,67 @@ From the interview transcript, a fund manager on the same problem:
 > frontier-level intelligence to catch. Frankly I no longer read what they send. I put it
 > through an AI coding tool first, and it produced a forty-point memo of what was wrong."
 
-So this does the work **and shows its evidence**. The agent proposes a counterparty, a
-project code and a classification for every row; the reviewer sees the proposal, its
-confidence, and the exact span of bank narrative it came from, and approves or corrects it.
+So this does the work **and shows its evidence**. Ten matcher stages propose a counterparty,
+a project code, a deal, a position and a classification for every row; the reviewer sees the
+proposal, its confidence in words, and the exact span of bank narrative it came from, and
+approves, corrects, or says the machine is right to be unsure.
+
+## Try it
+
+- **Live:** <https://ylookup-hackathon.onrender.com/>
+  *(free tier — it sleeps after 15 minutes, so the first load takes 30–60 seconds)*
+
+Or locally, from a clean clone:
+
+```bash
+./run.sh          # installs deps, builds the spine, prints the scoreboard (~3s)
+python3 serve.py  # the review queue at http://127.0.0.1:5001
+```
+
+Point `YLOOKUP_DATA` at the dataset directory if it is not in `~/Downloads`.
+
+## The thing it found that nobody asked it to
+
+The client's workbook ships a `Process` sheet — their own stage-by-stage guide, and the
+closest thing to a specification we were given. In three places it describes rules their
+own working file does not follow:
+
+| Their rule | Their data |
+|---|---|
+| Cash leg is `Received` or `Disbursed`, matching the credit or debit side | All 100 rows booked `Cash - Disbursed`, including **the 23 where money came in** |
+| Classification is one of six listed values | No `Investor` at all; adds `Other` (32 rows) and `Investment Transfer` (15) |
+| Project code is a lookup against the project report | 30 of 100 rows carry the literal string `Flag for review - no project match` |
+
+We reproduce the data so the output stays loadable, and flag the disagreement on every
+affected row with the reason in plain English. That is the fund manager's complaint —
+*"nobody reads it and asks whether this number foots to that number"* — made concrete on
+the administrator's own file, in one run. The reasoning is in
+[`docs/adr/0001`](docs/adr/0001-trust-the-data-over-the-process-sheet.md).
+
+## What it scores today
+
+`./run.sh` prints this. Ten of ten columns have a stage behind them; PDF extraction is
+100/100 against ground truth.
+
+| Field | agreement | net new |
+|---|---|---|
+| `matched_legal_entity` | 100/100 | — |
+| `cash_leg_transtype` | 100/100 | — |
+| `pulled_out_project_code` | 25/25 | 0/75 |
+| `classification` | 93/100 | — |
+| `matched_project_code` | 92/100 | — |
+| `counterparty_transtype` | 92/100 | — |
+| `pulled_out_sender_beneficiary` | 45/55 | 45/45 |
+| `matched_sender_beneficiary` | 31/48 | 8/52 |
+| `resolved_deal` | 25/30 | 0/70 |
+| `resolved_position` | 13/30 | 0/70 |
+
+A column's misses are not all defects. `matched_sender_beneficiary` disagrees on fourteen
+rows and sends eleven of them to a reviewer rather than booking something wrong.
+`resolved_position` reads worst and is not: on 26 of its 30 rows the reviewer gets either
+the answer or a short list with the answer on it, because a deal holding several equally
+valid positions gets a shortlist instead of a guess. Every missing point is accounted for
+row by row in [`docs/where-the-points-go.md`](docs/where-the-points-go.md).
 
 ## Using it on your own data
 
@@ -32,20 +90,13 @@ quietly producing a hundred rows of "no answer found".
 Scoring is skipped for uploaded data: `Staging Sheet` holds *the human's answers*, and
 real client data has no answer key.
 
-## Run it
+## The review queue
 
-```bash
-./run.sh
-```
-
-That installs dependencies, builds the data spine, and prints the score against the
-100 human-graded ground-truth rows. Then:
-
-```bash
-python3 serve.py
-```
-
-Point `YLOOKUP_DATA` at the dataset directory if it is not in `~/Downloads`.
+Exception-first: rows the matcher is sure about do not ask for attention. On a row that
+does, the reviewer can accept the proposal, take one of the alternatives, type a correction
+(suggested from the client's own reference lists), or answer **"I can't tell either"** —
+which clears the value rather than falling back to a proposal the person has already
+rejected. Export is a CSV carrying, per answer, who decided it.
 
 ## Where every number on screen comes from
 
