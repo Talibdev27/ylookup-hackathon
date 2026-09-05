@@ -406,6 +406,85 @@ def test_the_security_the_bank_bought_picks_the_position() -> None:
     assert result.value.endswith("(Azurite Array (Equity)))") and result.status == "auto"
 
 
+def test_the_most_specific_holding_is_the_one_the_payment_belongs_to() -> None:
+    """The master carries the same holding twice: a roll-up at the deal, and the
+    underlying asset named inside it. The payment belongs to the named one."""
+    lists = ReferenceLists(
+        legal_entities=["Nordvik Infrastructure V SCSp"],
+        related_parties=["NI V Azurite HoldCo Limited"],
+        deal_names=["NI V Azurite HoldCo Limited"],
+        project_codes=[{"Project Code": "Azurite Array"}],
+        deals=[
+            {"Legal Entity": "Nordvik Infrastructure V SCSp", "Deal Name": "NI V Azurite HoldCo Limited",
+             "Position": "NI V Azurite HoldCo Limited (Azurite Array (Equity))", "Security Type": "Equity"},
+            {"Legal Entity": "Nordvik Infrastructure V SCSp", "Deal Name": "NI V Azurite HoldCo Limited",
+             "Position": "NI V Azurite HoldCo Limited (Pallas Wind Limited (Azurite Array (Equity)))",
+             "Security Type": "Equity"},
+        ],
+    )
+    row = a_row(narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, EQUITY: PROJECT AZURITE.")
+    for name in ("matched_legal_entity", "pulled_out_project_code", "matched_project_code",
+                 "pulled_out_sender_beneficiary", "matched_sender_beneficiary",
+                 "classification", "resolved_deal"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    result = stages.resolved_position(row, lists)
+    assert result.value.endswith("(Pallas Wind Limited (Azurite Array (Equity)))")
+    assert result.status == "needs_review", "nothing in the bank text says so"
+    assert result.alternatives, "the roll-up stays beside it"
+
+
+def test_the_paying_side_of_a_fund_transfer_books_at_the_deal() -> None:
+    """Two sides of one transfer book at different levels: the fund receiving takes on
+    the underlying holding, the fund paying is funding the other's deal."""
+    lists = ReferenceLists(
+        legal_entities=["Nordvik Infrastructure Advanced Bioenergy Fund II SCSp"],
+        related_parties=["NI ABF I SCSp"],
+        deal_names=["Cephalus Biogas 001 Limited - EUR"],
+        project_codes=[{"Project Code": "Cephalus"}],
+        deals=[
+            {"Legal Entity": "Nordvik Infrastructure Advanced Bioenergy Fund II SCSp",
+             "Deal Name": "Cephalus Biogas 001 Limited - EUR",
+             "Position": "Cephalus Biogas 001 Limited - EUR (Equity)", "Security Type": "Equity"},
+            {"Legal Entity": "Nordvik Infrastructure Advanced Bioenergy Fund II SCSp",
+             "Deal Name": "Cephalus Biogas 001 Limited - EUR",
+             "Position": "Cephalus Biogas 001 Limited - EUR (Halstead (Equity))",
+             "Security Type": "Equity"},
+        ],
+    )
+    row = a_row(
+        account_name="NI ABF II SCSP",
+        narrative_raw="NI ABF I SCSP, PMT FRM NI ABF II SCSP TO NI ABF I, SCSP FOR ACQ 100PER "
+                      "OF SHARES IN, CEPHALUS BIOGAS 001 LTD",
+    )
+    for name in ("matched_legal_entity", "pulled_out_project_code", "matched_project_code",
+                 "pulled_out_sender_beneficiary", "matched_sender_beneficiary",
+                 "classification", "resolved_deal"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    assert row.fields["classification"].value == "Investment Transfer"
+    assert stages.resolved_position(row, lists).value == "Cephalus Biogas 001 Limited - EUR (Equity)"
+
+
+def test_a_deal_holding_only_equity_is_not_where_a_loan_was_drawn() -> None:
+    """A project financed through several vehicles is not financed the same way through
+    all of them, so the security the bank names narrows which of them this payment is."""
+    lists = ReferenceLists(
+        deal_names=["Fenwick Equity Only - GBP", "Fenwick Lender - GBP"],
+        project_codes=[{"Project Code": "FENWICK"}],
+        deals=[
+            {"Deal Name": "Fenwick Equity Only - GBP", "Position": "Fenwick Equity Only - GBP (FENWICK (Equity))",
+             "Security Type": "Equity"},
+            {"Deal Name": "Fenwick Lender - GBP", "Position": "Fenwick Lender - GBP (FENWICK (Funding Loan))",
+             "Security Type": "Funding loan"},
+        ],
+    )
+    row = a_row(currency="GBP",
+                narrative_raw="NORDVIK INFRA.V CN SC,, SHORT TERM LOAN: FROM NI V SCSP TO NI V CN SCSP. PROJECT FENWICK.")
+    for name in ("matched_legal_entity", "pulled_out_project_code", "matched_project_code",
+                 "pulled_out_sender_beneficiary", "matched_sender_beneficiary", "classification"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    assert stages.resolved_deal(row, lists).value == "Fenwick Lender - GBP"
+
+
 def test_positions_that_fit_equally_well_go_to_a_reviewer_together() -> None:
     """When the bank text does not say which security was bought, both candidates go up
     under the human's own heading rather than one being picked at random."""

@@ -682,9 +682,12 @@ def _security_kind(narrative: str) -> str | None:
     `PURCHASE 100PER OF ACC INT` -- accrued interest -- are both the loan.
     """
     text = " ".join(narrative.upper().split())
-    if "EQUITY:" in text or "SHARES" in text or "SHARE " in text:
+    # The bank names the security three ways: as a heading (`EQUITY:`), as what was
+    # bought (`ACQ 100PER OF SHARES`), and in brackets after the company (`... LTD
+    # (EQUITY)`). The third is easy to miss because the word abuts its punctuation.
+    if re.search(r"\bEQUITY\b|\bSHARES?\b", text):
         return "Equity"
-    if "LOAN" in text or "PRINCIP" in text or "ACC INT" in text:
+    if re.search(r"\bLOANS?\b|\bPRINCIP|\bACC INT\b", text):
         return "Funding loan"
     return None
 
@@ -752,6 +755,46 @@ def resolved_position(row: Row, lists: ReferenceLists) -> Field:
             ),
         )
     if len(positions) > 1:
+        # The master often carries the same holding at two levels of detail: a roll-up at
+        # the deal, and the underlying asset named inside it -- `... - EUR (Equity)` and
+        # `... - EUR (Halstead (Equity))`. Where exactly one candidate is more specific
+        # than every other, that is the holding the payment belongs to; the roll-up is
+        # where it lands afterwards. The proposal still goes to a reviewer with the rest
+        # kept beside it, because nothing in the bank text says so.
+        # On a transfer between two of the fund's own vehicles the two sides book at
+        # different levels: the fund receiving the money is taking on the underlying
+        # holding, and the fund paying is funding the other's deal rather than acquiring
+        # anything itself, so it books at the deal. Everywhere else the specific holding
+        # is the answer.
+        kind_of = row.fields.get("classification")
+        funding_another_fund = (
+            kind_of is not None
+            and kind_of.value == "Investment Transfer"
+            and not (row.raw.credit or 0) > 0
+        )
+        depth = (lambda p: -p.count("(")) if funding_another_fund else (lambda p: p.count("("))
+        chosen = max(positions, key=depth)
+        if sum(1 for p in positions if depth(p) == depth(chosen)) == 1:
+            return Field(
+                value=chosen,
+                confidence=0.6,
+                status="needs_review",
+                evidence=Evidence(
+                    text=(
+                        f"{len(positions)} positions under this deal fit this payment, and "
+                        + (
+                            "this is the deal-level one, which is where the paying fund "
+                            "books a transfer to another fund"
+                            if funding_another_fund
+                            else "this is the most specific of them"
+                        )
+                    ),
+                    source_list="Deal & Position Master List",
+                ),
+                alternatives=[
+                    Alternative(value=p, confidence=0.3) for p in positions if p != chosen
+                ][:4],
+            )
         return Field(
             value=MANY + JOIN.join(positions),
             confidence=0.4,
@@ -966,7 +1009,17 @@ def _deals_named(name: str, currency: str, deal_names: list[str]) -> list[str]:
     return opened[:1]
 
 
-def _deals_for_project(project: str, currency: str, lists: ReferenceLists) -> list[str]:
+def _holds_security(deal: str, kind: str, lists: ReferenceLists) -> bool:
+    """True when this deal carries at least one position of the security that was bought."""
+    return any(
+        row.get("Deal Name") == deal and row.get("Security Type", "").lower() == kind.lower()
+        for row in lists.deals
+    )
+
+
+def _deals_for_project(
+    project: str, currency: str, lists: ReferenceLists, kind: str | None = None
+) -> list[str]:
     """Every deal financing this project, preferring the ones held in this row's currency.
 
     More than one is a real answer here: a project financed through four holding vehicles
@@ -983,7 +1036,13 @@ def _deals_for_project(project: str, currency: str, lists: ReferenceLists) -> li
 
     def in_currency(names: list[str]) -> list[str]:
         tagged = [d for d in names if counterparty.fold(d).endswith(f" {currency}")]
-        return sorted(tagged or names)
+        chosen = sorted(tagged or names)
+        if not kind or len(chosen) < 2:
+            return chosen
+        # A project financed through several vehicles is not financed through all of them
+        # in the same way. A deal holding only equity is not where a loan was drawn, so it
+        # is not one of this payment's deals.
+        return [d for d in chosen if _holds_security(d, kind, lists)] or chosen
 
     named = [d for d in lists.deal_names if f" {target} " in f" {counterparty.fold(d)} "]
     if named:
@@ -1037,7 +1096,7 @@ def resolved_deal(row: Row, lists: ReferenceLists) -> Field:
         found = _deals_named(who, currency, lists.deal_names) if who else []
         reason = f"{who!r} is a deal in the master list" if found else ""
     else:
-        found = _deals_for_project(what, currency, lists)
+        found = _deals_for_project(what, currency, lists, _security_kind(row.raw.narrative_raw))
         reason = f"the money was moved to fund {what!r}" if found else ""
         if not found and who:
             found = _deals_named(who, currency, lists.deal_names)
