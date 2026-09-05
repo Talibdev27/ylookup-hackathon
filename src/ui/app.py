@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from flask import Flask, Response, jsonify, redirect, render_template, request, 
 from werkzeug.utils import secure_filename
 
 from src import exporter, pipeline
+from src.reports import statements as report_statements
 from src.spine import workspace
 from src.ui import labels
 
@@ -30,6 +32,24 @@ MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+
+@app.after_request
+def _allow_cross_origin_reads(response):
+    """The Next.js frontend runs as its own server on its own origin -- localhost:3000
+    talking to this app's localhost:5001 in dev, and its own deployed URL talking to
+    this app's Render URL in production. Neither is the same origin as this Flask app,
+    so a browser blocks the fetch entirely without this header. `/api/*` only: the
+    server-rendered pages under `/` are navigated to directly, never fetched cross-origin,
+    and don't need it.
+    """
+    if request.path.startswith("/api/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
 app.jinja_env.globals.update(
     label=labels.label,
     question=labels.question,
@@ -351,6 +371,98 @@ def api_review():
             "checks": state["checks"],
             "items": items,
             "unattached_flags": state["unattached_flags"],
+        }
+    )
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def _diu_and_coa() -> tuple[list[dict], list[dict]] | None:
+    """The two sheets `src/reports/statements.py` needs, or None if no workbook is set
+    up yet -- callers decide what that means for their own response."""
+    from src.spine.build import load_workbook
+
+    try:
+        sheets = load_workbook()
+    except SystemExit:
+        return None
+    diu_name = next((name for name in sheets if name.strip() == "DIU"), None)
+    if diu_name is None or "CoA" not in sheets:
+        return None
+    return sheets[diu_name], sheets["CoA"]
+
+
+def _entities_by_slug() -> dict[str, str]:
+    loaded = _diu_and_coa()
+    if not loaded:
+        return {}
+    diu, _ = loaded
+    return {_slug(name): name for name in report_statements.legal_entities(diu)}
+
+
+@app.get("/api/companies")
+def api_companies():
+    """The funds with journal activity in the reference workbook -- the closest thing
+    this data has to "companies" for a per-entity financial-statement view. Not the
+    matcher's output: see src/reports/statements.py for why this reads DIU/CoA directly.
+    """
+    entities = _entities_by_slug()
+    return jsonify(
+        {
+            "companies": [
+                {"id": slug, "name": name}
+                for slug, name in sorted(entities.items(), key=lambda pair: pair[1])
+            ]
+        }
+    )
+
+
+@app.get("/api/companies/<company_id>/balance-sheet")
+def api_balance_sheet(company_id: str):
+    loaded = _diu_and_coa()
+    if not loaded:
+        return jsonify({"error": "no reference workbook is set up yet"}), 404
+    entity = _entities_by_slug().get(company_id)
+    if not entity:
+        return jsonify({"error": f"no company {company_id!r}"}), 404
+    diu, coa = loaded
+    return jsonify(report_statements.balance_sheet(diu, coa, legal_entity=entity))
+
+
+@app.get("/api/companies/<company_id>/income-statement")
+def api_income_statement(company_id: str):
+    loaded = _diu_and_coa()
+    if not loaded:
+        return jsonify({"error": "no reference workbook is set up yet"}), 404
+    entity = _entities_by_slug().get(company_id)
+    if not entity:
+        return jsonify({"error": f"no company {company_id!r}"}), 404
+    diu, coa = loaded
+    return jsonify(report_statements.income_statement(diu, coa, legal_entity=entity))
+
+
+@app.get("/api/companies/<company_id>/cash-flow")
+def api_cash_flow(company_id: str):
+    """Deliberately honest rather than invented: the data has a cash/non-cash flag
+    (`cash_leg_transtype`) and a transaction classification, but nothing that maps to
+    operating, investing and financing activities. Returning fabricated numbers here is
+    exactly the failure this whole product argues against -- see docs/analyst-flags.md.
+    """
+    entity = _entities_by_slug().get(company_id)
+    if not entity:
+        return jsonify({"error": f"no company {company_id!r}"}), 404
+    return jsonify(
+        {
+            "legal_entity": entity,
+            "available": False,
+            "reason": (
+                "This data has a cash/non-cash flag and a transaction classification, "
+                "but nothing that maps to operating, investing and financing activities. "
+                "Building this needs a real mapping decision, not a rollup -- see "
+                "docs/analyst-flags.md."
+            ),
         }
     )
 
