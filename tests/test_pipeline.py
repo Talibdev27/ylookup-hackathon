@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import pipeline
+from src.checks import run as check_runner
 from src.spine import workspace
 
 
@@ -25,10 +26,16 @@ def test_running_the_sample_workspace() -> None:
     assert not result.unwritten, "every column has a stage now; a name here is a regression"
     assert result.stages_applied == result.stages_total
     assert result.ok, f"stages failed: {dict(result.failures)}"
+    assert result.checks_total == 1
+    assert result.checks_applied == ["balance_continuity"]
+    assert not result.check_failures and result.flags_found == 0
 
     rows = json.loads(pipeline.ROWS.read_text())
     assert len(rows) == 100
     assert rows[0]["raw"]["narrative_normalised"], "normalise runs before matching"
+    report = json.loads(pipeline.FLAGS.read_text())
+    assert report["checks_applied"] == ["balance_continuity"]
+    assert report["flags_found"] == 0 and report["flags"] == []
 
 
 def test_a_run_invalidates_reviewer_decisions() -> None:
@@ -41,11 +48,32 @@ def test_a_run_invalidates_reviewer_decisions() -> None:
     callers get it.
     """
     pipeline.DECISIONS.write_text(json.dumps({"17": {"choice": "approve", "value": "stale"}}))
-    assert pipeline.DECISIONS.exists()
+    pipeline.FLAG_DECISIONS.write_text(json.dumps({"old-flag": {"action": "acknowledge"}}))
+    assert pipeline.DECISIONS.exists() and pipeline.FLAG_DECISIONS.exists()
 
     pipeline.run(workspace.current())
 
     assert not pipeline.DECISIONS.exists(), "decisions from a previous run must not survive"
+    assert not pipeline.FLAG_DECISIONS.exists(), "flag decisions from a previous run must not survive"
+
+
+def test_a_check_failure_keeps_the_transaction_queue() -> None:
+    def exploding(rows):
+        raise RuntimeError("not for a reviewer")
+
+    original = list(check_runner.REGISTRY)
+    check_runner.REGISTRY[:] = [("broken_check", exploding)]
+    try:
+        result = pipeline.run(workspace.current())
+    finally:
+        check_runner.REGISTRY[:] = original
+
+    assert result.rows == 100
+    assert not result.ok and sum(result.check_failures.values()) == 1
+    assert len(json.loads(pipeline.ROWS.read_text())) == 100
+    report = json.loads(pipeline.FLAGS.read_text())
+    assert report["checks_applied"] == []
+    assert sum(report["check_failures"].values()) == 1
 
 
 def test_an_empty_workspace_says_so_rather_than_crashing() -> None:

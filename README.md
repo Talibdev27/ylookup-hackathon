@@ -25,9 +25,10 @@ evidence**, because the way to cut turns is to make every answer checkable befor
 back — he checks everything today only because he cannot tell which numbers are safe.
 
 Ten matcher stages propose a counterparty, a project code, a deal, a position and a
-classification for every row. The reviewer sees the proposal, its confidence in words, and
-the exact span of bank narrative it came from, and approves, corrects, or says the machine
-is right to be unsure.
+classification for every row. Automated checks then look for inconsistencies such as a
+broken running balance. The reviewer sees both kinds of work in one queue, with the
+proposal or finding, its reason, and the statement source, and can approve, correct,
+acknowledge, resolve, or say the machine is right to be unsure.
 
 ## Try it
 
@@ -116,7 +117,22 @@ Exception-first: rows the matcher is sure about do not ask for attention. On a r
 does, the reviewer can accept the proposal, take one of the alternatives, type a correction
 (suggested from the client's own reference lists), or answer **"I can't tell either"** —
 which clears the value rather than falling back to a proposal the person has already
-rejected. Export is a CSV carrying, per answer, who decided it.
+rejected.
+
+The same transaction card also carries any automated inconsistency findings. The first
+registered check verifies running-balance continuity. Each finding has a stable ID, severity,
+plain-English explanation, expected and actual values, and its statement page. A reviewer can
+acknowledge it, mark it resolved, or mark it as a false positive, with an optional note.
+Matcher answers and check actions are stored separately and both travel with the CSV export.
+
+The sample statements correctly produce zero balance findings. The page says **“No balance
+inconsistencies found”** after recording that the check ran; a clean result is never presented
+as a skipped check. Long proposed position values use a short preview with an accessible
+expand/collapse control, while the complete value remains available to decisions and export.
+
+A separate frontend can consume `GET /api/review` and submit automated-flag decisions to
+`POST /api/flags/<flag_id>/decide`. The full schemas and screen-state guidance are in
+[`docs/FRONTEND-HANDOFF.md`](docs/FRONTEND-HANDOFF.md).
 
 ## Where every number on screen comes from
 
@@ -166,10 +182,11 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/spine/` | Reads the reference workbook and the statement PDFs |
 | `src/matcher/` | The ten Process-sheet stages, `ReferenceLists`, and `score.py` |
 | `src/ui/` | The exception-first review queue, and the wording it puts on screen |
-| `src/exporter.py` | The reviewed queue as a spreadsheet, carrying who decided each answer |
+| `src/exporter.py` | The reviewed queue as a spreadsheet, carrying matcher answers, check findings and reviewer decisions |
 | `src/extraction/` | Document-agnostic PDF reading and Excel output, for document types beyond statements |
-| `src/checks/` | Automated inconsistency checks over already-structured records |
-| `tests/` | Ten suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
+| `src/checks/` | Registry, runner and automated inconsistency checks over already-structured records |
+| `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
+| `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
 | `docs/` | The architecture, the roadmap, the decision records, and the task briefs. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us |
 
 ## Requirements

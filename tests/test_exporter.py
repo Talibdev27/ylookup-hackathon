@@ -36,6 +36,18 @@ def field(value, status="auto"):
     return {"value": value, "status": status, "confidence": 0.9}
 
 
+def flag(flag_id: str, row_id: int, message: str = "balance does not reconcile") -> dict:
+    return {
+        "flag_id": flag_id,
+        "check": "balance_continuity",
+        "severity": "error",
+        "message": message,
+        "source": {"pdf": "statement.pdf", "page": 1, "row_id": row_id},
+        "expected": 150.0,
+        "actual": 200.0,
+    }
+
+
 def parse(text: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
@@ -101,6 +113,57 @@ def test_summary_counts_rows_not_fields() -> None:
     assert counts["rows"] == 3
     assert counts["outstanding"] == 2, "row 1 has an unanswered field, row 2 is untouched"
     assert counts["reviewed"] == 0
+
+
+def test_check_findings_and_their_disposition_travel_with_the_row() -> None:
+    rows = [a_row(1, matched_sender_beneficiary=field("NIP P/S"))]
+    findings = [flag("flag-1", 1, "balance is wrong,\nand needs review")]
+    flag_decisions = {"flag-1": {"action": "resolved", "note": "Bank confirmed, fixed"}}
+    out = parse(to_csv(rows, {}, findings, flag_decisions))[0]
+    assert out["Check findings"] == "balance is wrong,\nand needs review"
+    assert out["Check severity"] == "error"
+    assert out["Check expected"] == "150.0" and out["Check actual"] == "200.0"
+    assert out["Check review action"] == "resolved"
+    assert out["Check reviewer note"] == "Bank confirmed, fixed"
+
+
+def test_multiple_flags_export_in_stable_id_order() -> None:
+    rows = [a_row(1)]
+    findings = [flag("z-last", 1, "second"), flag("a-first", 1, "first")]
+    out = parse(to_csv(rows, {}, findings, {}))[0]
+    assert out["Check findings"] == "first\nsecond"
+
+
+def test_field_and_flag_decisions_are_independent() -> None:
+    rows = [a_row(1, matched_sender_beneficiary=field("Wrong", status="needs_review"))]
+    field_decisions = {
+        "1": {"matched_sender_beneficiary": {"choice": "manual", "value": "NIP P/S"}}
+    }
+    flag_decisions = {"flag-1": {"action": "false_positive", "note": "Statement corrected"}}
+    out = parse(to_csv(rows, field_decisions, [flag("flag-1", 1)], flag_decisions))[0]
+    assert out["Counterparty"] == "NIP P/S"
+    assert out["Counterparty — decided by"] == "reviewer: manual"
+    assert out["Check review action"] == "false_positive"
+
+
+def test_summary_counts_questions_flags_and_transactions_separately() -> None:
+    rows = [
+        a_row(1, a=field("x", status="needs_review"), b=field("y", status="needs_review")),
+        a_row(2, a=field("x")),
+    ]
+    findings = [flag("flag-1", 1), flag("flag-2", 2)]
+    counts = summary(
+        rows,
+        {"1": {"a": {"choice": "approve", "value": "x"}}},
+        findings,
+        {"flag-2": {"action": "acknowledge"}},
+    )
+    assert counts["matcher_questions_total"] == 2
+    assert counts["matcher_questions_remaining"] == 1
+    assert counts["automated_flags_found"] == 2
+    assert counts["automated_flags_remaining"] == 1
+    assert counts["total_review_items_remaining"] == 2
+    assert counts["outstanding"] == 1 and counts["reviewed"] == 1
 
 
 if __name__ == "__main__":

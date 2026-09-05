@@ -6,7 +6,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.ui.labels import highlight, money, pretty_date, statement_label
+from src.ui.labels import (
+    check_label,
+    flag_action_label,
+    highlight,
+    is_long_value,
+    money,
+    pretty_date,
+    severity_label,
+    statement_label,
+    value_preview,
+)
 
 
 def test_statement_label_is_readable() -> None:
@@ -52,6 +62,20 @@ def test_highlight_without_spans_is_plain_escaped_text() -> None:
 def test_pretty_date() -> None:
     assert pretty_date("2026-03-31") == "31 Mar 2026"
     assert pretty_date(None) == ""
+
+
+def test_check_vocabulary_is_for_a_reviewer() -> None:
+    assert check_label("balance_continuity") == "Balance continuity"
+    assert severity_label("error") == "Does not reconcile"
+    assert flag_action_label("false_positive") == "Marked as not an issue"
+
+
+def test_long_values_are_previewed_without_changing_the_original() -> None:
+    value = "Position " + "x" * 300
+    assert is_long_value(value)
+    assert len(value_preview(value)) < len(value)
+    assert value_preview(value).endswith("…")
+    assert not is_long_value("short")
 
 
 if __name__ == "__main__":

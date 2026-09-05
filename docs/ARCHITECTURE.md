@@ -3,7 +3,8 @@
 The backend end to end: what each piece owns, what it reads and writes, and how one
 transaction moves from a PDF to a reviewed answer. `CONTEXT.md` defines the vocabulary
 used here; `CONTRACT.md` owns the exact row shape; this document is the map connecting
-them. Frontend design is out of scope here on purpose — that is being worked separately.
+them. The frontend-facing JSON contract and interaction states live in
+`docs/FRONTEND-HANDOFF.md`; broad visual design remains separate.
 
 Numbers in this document are a snapshot, not a promise. Run `./run.sh` for what is true
 right now; the scoreboard is the arbiter, not this file.
@@ -63,10 +64,11 @@ vendors, deal names, project codes. Built once per run, from the client's workbo
 from a bare in-memory fake in tests. Owns every sheet name and column name in the
 workbook, so a renamed sheet breaks in exactly one place.
 
-**`Flag`** (`src/checks/contract.py`) — one finding from a check: `check` (which one),
-`severity`, `message` (fund-manager language, like `Evidence.text`), `source`, and what
-was `expected` versus what was `actual`. A check's signature is always
-`(records) -> list[Flag]`.
+**`Flag`** (`src/checks/contract.py`) — one finding from a check: a deterministic
+`flag_id`, `check` (which one), `severity`, `message` (fund-manager language, like
+`Evidence.text`), `source`, and what was `expected` versus what was `actual`. The ID is
+derived from the finding rather than its list position, so a reviewer action can safely
+refer to it. A check's signature is always `(records) -> list[Flag]`.
 
 ---
 
@@ -199,51 +201,62 @@ what they left blank, how much do we resolve).
 
 Two different mechanisms, one purpose.
 
-**The human review queue** (`src/ui/app.py`) reads `data/rows.json`, finds every row with
-at least one field whose `status` is not `"auto"`, and presents it as a question: what
-does the bank text say, what did the matcher propose, why. A reviewer's decision
-(`approve` / `alternative` / `manual` / `unresolved`) is stored in `data/decisions.json`,
-keyed by row id and then by field, and always wins over the matcher's proposal.
-`src/ui/labels.py` is the one place any of this gets put into words a fund manager would
-read — field keys, confidence floats and currency codes never reach a template directly.
+**The human review queue** (`src/ui/app.py`) joins `data/rows.json` and
+`data/flags.json`. A transaction appears once, with separate **Answers to check** and
+**Inconsistencies found** sections when it has one or both. A matcher decision (`approve`
+/ `alternative` / `manual` / `unresolved`) is stored in `data/decisions.json`, keyed by
+row id and then by field, and always wins over the matcher's proposal. A check decision
+(`acknowledge` / `resolved` / `false_positive`, plus an optional note) is stored
+separately in `data/flag-decisions.json`, keyed by stable flag id. A transaction is
+complete only after every matcher question and check finding attached to it is handled.
+`src/ui/labels.py` is the one place check names, severities, field keys, confidence and
+currency values are turned into wording for a fund manager.
 
 **The automated checking agent** (`src/checks/`) runs over already-structured records
 looking for something that does not add up, independent of whether any single field's
 confidence looks low. It is a different question from what the matcher asks: the matcher
-asks *"what is this?"*, a check asks *"does this reconcile?"*. `footing.py` is the first
-one — balance continuity. It matters that statements print newest-first (stage A's note
-above): the check reverses each account's rows into chronological order before checking
-that `balance[i] == balance[i-1] + amount[i]`, which was verified by hand against every
-one of the 100 real transactions before being written as a check. It currently finds
+asks *"what is this?"*, a check asks *"does this reconcile?"*. `run.py` owns the check
+registry and failure isolation: one broken check is logged and recorded as failed without
+dropping extracted transactions or blocking the matcher. `footing.py` is the first check
+— balance continuity. It reverses each account's newest-first rows into chronological
+order before checking that `balance[i] == balance[i-1] + amount[i]`. It currently finds
 nothing on the bundled data, which is the correct answer — those statements foot.
 
-Neither mechanism is wired to the other yet. A `Flag` from `src/checks/` is not currently
-rendered in the review queue; `docs/ROADMAP.md` and the frontend work cover that.
+The pipeline persists execution facts as well as findings, so zero flags after one
+completed check is distinguishable from a check that never ran. Findings are also
+recorded in `data/store.sqlite` beside the versioned source documents; `data/flags.json`
+is the active review report because it includes runner success/failure status. The Jinja
+page and `GET /api/review` expose that same state. The JSON contract is documented in
+`docs/FRONTEND-HANDOFF.md`.
 
 ---
 
 ## 7 · The two ways in, and where state lives
 
-**Command line**: `python -m src.pipeline` runs stage A through C once, writes
-`data/rows.json`, and deletes `data/decisions.json` — a fresh run invalidates old
-decisions because they are keyed by row id, which is positional, and a stale decision
-could silently reattach to a different transaction. `python -m src.matcher.score` then
-grades `rows.json` against `Staging Sheet`. `run.sh` is both, back to back.
+**Command line**: `python -m src.pipeline` extracts structured rows, runs automated checks,
+runs the matcher, writes `data/rows.json` and `data/flags.json`, then invalidates both
+`data/decisions.json` and `data/flag-decisions.json`. A fresh run may assign row ids to
+different transactions; keeping either decision file could silently attach an old human
+decision to new data. `python -m src.matcher.score` then grades `rows.json` against
+`Staging Sheet`. `run.sh` is both, back to back.
 
 **The web app**: `serve.py` starts `src/ui/app.py`. `/upload` accepts a reference
 workbook and/or a set of statement PDFs, validates them (right extension, workbook
 present if none is set up yet), stores them under `data/workspace/`, and calls the exact
 same `pipeline.run()` the CLI does — there used to be three separate copies of this
 orchestration with drifted behaviour, which is why `src/pipeline.py` exists as the single
-entry point both paths now share. `/` is the review queue. `/rows/<id>/decide` records a
-reviewer's answer. `/export.csv` streams the reviewed queue out.
+entry point both paths now share. `/` is the review queue, `GET /api/review` is its JSON
+contract, `/rows/<id>/decide` records a matcher-field answer, and
+`/api/flags/<flag_id>/decide` records a check disposition. `/export.csv` streams the
+reviewed queue, including findings and their dispositions, out.
 
-**State is files, not a database**, on purpose: `data/rows.json`, `data/decisions.json`,
-and whatever is in `data/workspace/`. This is a deliberate hosting decision
-(`docs/TASK-hosting.md`) — one instance, one worker, a persistent disk if the platform
-offers one. Two workers would each have their own filesystem view and could serve a
-half-loaded queue; a second instance would disagree with the first about what was just
-uploaded.
+**State is local files, not a managed service**, on purpose. `data/store.sqlite` keeps a
+content-hashed version history of uploaded workbooks and extracted PDF pages and mirrors
+the current check findings. `data/rows.json`, `data/flags.json`, `data/decisions.json`,
+`data/flag-decisions.json`, and `data/workspace/` are the active run and review state.
+This is a deliberate hosting decision (`docs/TASK-hosting.md`) — one instance, one worker,
+and a persistent disk. Two workers could race while replacing active files or serve
+different review state.
 
 ---
 
@@ -272,7 +285,8 @@ The EUR 0.44 bank charge on `NI ABF I SCSP`'s statement, concretely, stage by st
 4. **Reviewer.** Every field above resolved at `status = "auto"`, so this row never
    appears in the human review queue — it is one of the rows the matcher is confident
    about. `checks/footing.py` includes it in its balance-continuity pass for this
-   account; it foots, so it produces no flag either.
+   account; it foots, so it produces no flag either. The review page still states that
+   the balance check completed and found no inconsistencies.
 
 5. **Out.** `exporter.to_csv()` includes the row with `matcher` as the source for every
    field, since no reviewer decision exists for it.
@@ -289,9 +303,9 @@ whatever the reviewer decides is what step 5 exports.
 Adding a matcher stage: one function of shape `(row, lists) -> Field` in
 `src/matcher/stages.py`, one line in `REGISTRY`. `AGENTS.md` covers this.
 
-Adding a check: one function of shape `(records) -> list[Flag]` in `src/checks/`, tested
-against real data both clean and deliberately broken — `tests/test_footing.py` is the
-template. See `docs/ROADMAP.md`.
+Adding a check: one function of shape `(records) -> list[Flag]` in `src/checks/`, one
+registry entry in `src/checks/run.py`, and tests against real data both clean and
+deliberately broken — `tests/test_footing.py` is the template. See `docs/ROADMAP.md`.
 
 Adding a second document type: a new parser over `src/extraction/pdf_text.py`, mirroring
 what `spine/pdf.py` does for statements, producing records that `workbook_writer.py` can

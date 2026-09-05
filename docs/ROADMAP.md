@@ -49,10 +49,12 @@ output.
 `src/checks/` runs after extraction over already-structured records, asking *does this add
 up?* rather than *what is this?* — a different job from the matcher. `footing.py` is the
 first: balance continuity, one `Flag` per row where a statement's running balance does not
-follow from the row before it in the same account.
+follow from the row before it in the same account. The check is now part of the normal
+pipeline: its execution status and findings are persisted, shown in the unified review
+queue, available through the frontend JSON API, and included in the reviewed export.
 
 It currently finds nothing on the sample data, which is the correct answer — those
-statements do foot. The checks worth adding next are the ones that would have caught the
+statements do foot. Future checks worth adding are the ones that would have caught the
 interview's complaints: a subsequent event whose date was rolled forward rather than moved,
 a side-letter fee calculation that does not tie, a balance sheet with no bridge to the
 equity balance.

@@ -61,6 +61,11 @@ client's workbook. Owns the counterparty priority order and every sheet name.
 The two halves resolve independently, because uploading this week's statements against
 reference lists that are already set up is the normal case.
 
+**Unified store** (`src/storage/`) — the file-backed SQLite history of uploaded workbooks,
+extracted PDF pages and current automated findings. It versions genuinely changed files
+by content hash. The active review queue still uses the JSON row, check-status and
+decision files because those are replaced together by a pipeline run.
+
 ## The matcher
 
 **Stage** — one step of the Process sheet, `(row, lists) -> Field`. Stages run in the
@@ -91,10 +96,12 @@ different act from answering wrongly, and the arithmetic keeps them apart.
 statement parser is one consumer of that, not a replacement for it. A new document type
 gets its own parser over the same primitive rather than its own PDF-reading code.
 
-**Flag** (`src/checks/contract.py`) — one finding from the checking agent: a `check` name,
-a `severity`, a `message` that reaches a fund manager verbatim, and the `source` it points
-at. Deliberately shaped like **Field** — a flag with no citation is the unchecked output
-the interview describes, so it never ships as a bare string either.
+**Flag** (`src/checks/contract.py`) — one finding from the checking agent: a stable
+`flag_id`, a `check` name, a `severity`, a message that reaches a fund manager verbatim,
+the `source` it points at, and expected versus actual values. Deliberately shaped like
+**Field** — a flag with no citation is the unchecked output the interview describes, so
+it never ships as a bare string either. Reviewer dispositions are keyed by `flag_id` and
+kept separate from matcher-field decisions.
 
 **Checking agent** (`src/checks/`) — runs after extraction, over already-structured
 records, looking for internal inconsistency rather than resolving an unknown value. Not

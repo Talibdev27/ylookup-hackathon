@@ -45,8 +45,12 @@ def test_catches_a_broken_balance() -> None:
     flags = footing.check(rows)
     assert len(flags) == 1
     assert flags[0].check == "balance_continuity"
+    assert len(flags[0].flag_id) == 24
+    assert flags[0].severity == "error"
+    assert flags[0].source == {"pdf": "test.pdf", "page": 1, "row_id": 1}
     assert flags[0].expected == 150.0
     assert flags[0].actual == 200.0
+    assert "should be 150.00" in flags[0].message
 
 
 def test_ignores_other_accounts() -> None:

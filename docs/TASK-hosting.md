@@ -38,10 +38,12 @@ URL, so it is the right thing to be looking at.
 
 Three facts about this app that decide your deployment:
 
-**It has no database.** State is files under `data/` — `rows.json`, `decisions.json`, and
-whatever was uploaded into `data/workspace/`. On a platform with an ephemeral filesystem
-every redeploy wipes them, and on more than one instance the two disagree. **Deploy a
-single instance, and attach a persistent disk if the platform offers one.**
+**It has no managed database.** State is local files under `data/`: `store.sqlite` holds
+the versioned document/extraction history and current check findings; `rows.json`,
+`flags.json`, `decisions.json`, `flag-decisions.json`, and `workspace/` hold the active
+review run. On a platform with an ephemeral filesystem every redeploy wipes them, and
+on more than one instance active review state can diverge. **Deploy a single instance,
+and attach a persistent disk if the platform offers one.**
 
 **It needs no dataset to boot.** The empty state is a working front door: a judge lands on
 "No statements loaded yet", goes to `/upload`, and loads their own. That is the product
@@ -70,7 +72,7 @@ above and give you a URL — pick the one where you already have an account, bec
 up costs more time than deploying.
 
 The app reads `PORT` from the environment, so the start command above works unmodified.
-Nothing else needs configuring: no environment variables, no database URL, no secrets.
+Nothing else needs configuring: no environment variables, external database URL, or secrets.
 
 **Done when** the URL opens from your phone, on mobile data, showing "No statements loaded
 yet".

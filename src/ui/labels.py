@@ -26,6 +26,22 @@ FIELD_LABELS: dict[str, tuple[str, str]] = {
     "resolved_position": ("Position", "Which position under that deal?"),
 }
 
+CHECK_LABELS = {
+    "balance_continuity": "Balance continuity",
+}
+
+SEVERITY_LABELS = {
+    "info": "For information",
+    "review": "Needs review",
+    "error": "Does not reconcile",
+}
+
+FLAG_ACTION_LABELS = {
+    "acknowledge": "Acknowledged",
+    "resolved": "Marked resolved",
+    "false_positive": "Marked as not an issue",
+}
+
 SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "DKK": "kr "}
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -37,6 +53,30 @@ def label(field_key: str) -> str:
 
 def question(field_key: str) -> str:
     return FIELD_LABELS.get(field_key, ("", "Is this right?"))[1]
+
+
+def check_label(check: str) -> str:
+    return CHECK_LABELS.get(check, "Automated check")
+
+
+def severity_label(severity: str) -> str:
+    return SEVERITY_LABELS.get(severity, "Needs review")
+
+
+def flag_action_label(action: str) -> str:
+    return FLAG_ACTION_LABELS.get(action, "Reviewed")
+
+
+def value_preview(value, limit: int = 220) -> str:
+    """Keep long proposals readable without changing what gets decided or exported."""
+    text = "" if value is None else str(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
+def is_long_value(value, limit: int = 220) -> bool:
+    return len("" if value is None else str(value)) > limit
 
 
 def money(amount: float | None, currency: str) -> str:
