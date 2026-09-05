@@ -44,20 +44,6 @@ gradeable target is dataset 02 (investor-level GL → loader), which is real, pr
 much larger: 34,000 source rows across 43 columns, four crosswalks, and a 19,000-row
 output.
 
-**A second extraction path, for documents `pdfplumber` reads badly.** Bank statements are
-clean, machine-generated tables — `pdfplumber` reads them well, which is why
-`matched_legal_entity` and `cash_leg_transtype` hit 100/100. A scanned or multi-column
-financial statement is a different problem. `marker_service/` wraps
-[Marker](https://github.com/datalab-to/marker) — layout-aware, deep-learning extraction —
-as its own deployment, because it needs Python 3.10+ and PyTorch, neither of which the
-main app's Python 3.9 target or single Render-free-tier worker can carry.
-`src/extraction/marker_client.py` is the one place the main app knows this service
-exists: a thin HTTP call, gated entirely on `MARKER_SERVICE_URL` being set, so the app
-runs exactly as it does today with the service turned off. See
-`marker_service/README.md` for what it costs to actually deploy and run this — it is not
-free compute, and it is not fast on a cold start even with model weights baked into the
-image.
-
 ## More checks
 
 `src/checks/` runs after extraction over already-structured records, asking *does this add

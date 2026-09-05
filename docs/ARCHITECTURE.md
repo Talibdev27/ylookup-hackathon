@@ -99,18 +99,6 @@ and dates stored as Excel serials. `src/spine/build.py` calls it and, for the bu
 sample only, asserts every sheet's row count against a known value — real uploads are not
 held to somebody else's row counts.
 
-**A second pull-data path, for documents `pdfplumber` reads badly.** Bank statements are
-clean, machine-generated tables, which is most of why `pdfplumber` gets them right.
-Something scanned, multi-column, or laid out less predictably is a different problem, and
-`src/extraction/marker_client.py` is where that goes: a thin HTTP client calling
-[Marker](https://github.com/datalab-to/marker), a layout-aware deep-learning extractor,
-running as its own service in `marker_service/` rather than as a dependency of this app.
-It needs Python 3.10+ and PyTorch, which do not fit the main app's Python 3.9 target or
-its single Render-free-tier worker, so it is a deliberately separate deployment — see
-`marker_service/README.md`. The client is gated entirely on the `MARKER_SERVICE_URL`
-environment variable: unset, `marker_client.available()` is `False` and nothing about the
-main app changes, including its dependencies, which gain only `requests`.
-
 ---
 
 ## 4 · Stage B — convert
@@ -310,11 +298,3 @@ what `spine/pdf.py` does for statements, producing records that `workbook_writer
 render and that `src/checks/` can run over unchanged, since checks do not know or care
 which document type a record came from. See `docs/ROADMAP.md` for why bank statements are
 the only document type with real sample data today, and what the fallback is.
-
-Using Marker instead of `pdfplumber` for a document: deploy `marker_service/` (see its
-README — this is a real deployment step, not a config flag), set `MARKER_SERVICE_URL`
-wherever the main app runs, and call `src/extraction/marker_client.extract()` from a
-parser instead of `pdf_text.extract()`. Wrap the call: `marker_client.extract()` raises
-`MarkerUnavailable` when the service is not configured and `MarkerError` when it is
-configured but fails, and a parser should decide for itself whether to fall back to
-`pdfplumber` on either.

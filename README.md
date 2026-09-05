@@ -133,7 +133,6 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/ui/` | W3 | Exception-first review queue |
 | `src/extraction/` | — | Document-agnostic PDF reading and Excel output, for document types beyond statements |
 | `src/checks/` | — | Automated inconsistency checks over already-structured records |
-| `marker_service/` | — | Marker, as its own deployment — needs Python 3.10+ and PyTorch, so it cannot live in `src/`. Off by default; see its README |
 | `docs/` | all | Active task briefs, the architecture, the roadmap, the decision records, and `counterparty-matching.md` / `deal-resolution.md` — how the hard columns work, and what was measured and rejected getting there. `where-the-points-go.md` accounts for every point the scoreboard does not give us |
 
 ## Requirements

@@ -4,4 +4,3 @@ rapidfuzz==3.10.1
 python-dateutil==2.9.0.post0
 flask==3.0.3
 gunicorn==23.0.0
-requests==2.32.3
