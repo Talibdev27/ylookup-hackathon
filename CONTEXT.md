@@ -55,6 +55,24 @@ sample workbook has one; real client data has no answer key.
 Agreement is how often we reproduce an answer the human filled in. Net new is how often
 we resolve a row they left blank.
 
+## Beyond the matcher
+
+**Extraction** (`src/extraction/`) — the document-agnostic layer underneath the matcher.
+`pdf_text.extract()` turns any PDF into page text and page tables; `spine/pdf.py`'s
+statement parser is one consumer of that, not a replacement for it. A new document type
+gets its own parser over the same primitive rather than its own PDF-reading code.
+
+**Flag** (`src/checks/contract.py`) — one finding from the checking agent: a `check` name,
+a `severity`, a `message` that reaches a fund manager verbatim, and the `source` it points
+at. Deliberately shaped like **Field** — a flag with no citation is the unchecked output
+the interview describes, so it never ships as a bare string either.
+
+**Checking agent** (`src/checks/`) — runs after extraction, over already-structured
+records, looking for internal inconsistency rather than resolving an unknown value. Not
+the same job as the matcher: the matcher asks "what is this?", a check asks "does this
+add up?". `footing.py`'s balance-continuity check is the first one, and the shape any
+later check follows: `(records) -> list[Flag]`.
+
 ## Architecture vocabulary
 
 See the `codebase-design` skill. In short: a **module** is deep when a lot of behaviour
