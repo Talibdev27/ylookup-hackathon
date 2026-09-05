@@ -123,17 +123,21 @@ answer different questions:
 
 See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 
-| Path | Owner | What |
-|---|---|---|
-| `src/contract.py` | shared | The row shape. Read `CONTRACT.md` before touching it. |
-| `src/pipeline.py` | — | Run the whole thing: `run(workspace) → PipelineResult` |
-| `src/spine/` | W1 | Reads the workbook and the statement PDFs |
-| `src/matcher/` | W2 | The Process-sheet stages, `ReferenceLists`, and `score.py` |
-| `src/exporter.py` | — | The reviewed queue as a spreadsheet, with who decided each answer |
-| `src/ui/` | W3 | Exception-first review queue |
-| `src/extraction/` | — | Document-agnostic PDF reading and Excel output, for document types beyond statements |
-| `src/checks/` | — | Automated inconsistency checks over already-structured records |
-| `docs/` | all | Active task briefs, the architecture, the roadmap, the decision records, and `counterparty-matching.md` / `deal-resolution.md` — how the hard columns work, and what was measured and rejected getting there. `where-the-points-go.md` accounts for every point the scoreboard does not give us |
+| Path | What |
+|---|---|
+| `run.sh` | The feedback loop: build the spine, run every stage, print the scoreboard |
+| `run-tests.sh` | Every suite, exiting non-zero on the first failure |
+| `serve.py` | Starts the review queue |
+| `src/contract.py` | The row shape every stage reads and writes. `CONTRACT.md` explains it |
+| `src/pipeline.py` | Runs the whole thing: `run(workspace) → PipelineResult` |
+| `src/spine/` | Reads the reference workbook and the statement PDFs |
+| `src/matcher/` | The ten Process-sheet stages, `ReferenceLists`, and `score.py` |
+| `src/ui/` | The exception-first review queue, and the wording it puts on screen |
+| `src/exporter.py` | The reviewed queue as a spreadsheet, carrying who decided each answer |
+| `src/extraction/` | Document-agnostic PDF reading and Excel output, for document types beyond statements |
+| `src/checks/` | Automated inconsistency checks over already-structured records |
+| `tests/` | Ten suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
+| `docs/` | The architecture, the roadmap, the decision records, and the task briefs. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us |
 
 ## Requirements
 
