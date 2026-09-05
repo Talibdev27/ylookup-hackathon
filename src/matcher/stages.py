@@ -1056,6 +1056,16 @@ def _deals_for_project(
     return in_currency(sorted(held))
 
 
+def _paying_for_another_vehicle(row: Row) -> bool:
+    """True when this account settled a payment on another vehicle's behalf.
+
+    Both legs of these are in the sample and they book differently: the fund that receives
+    the money takes on the deal, and the fund that paid it out has acquired nothing.
+    """
+    text = " ".join(row.raw.narrative_raw.upper().split())
+    return "ON BEHALF OF" in text and not (row.raw.credit or 0) > 0
+
+
 def resolved_deal(row: Row, lists: ReferenceLists) -> Field:
     """Stage 5. The deal this transaction sits under, from the 6,635-row deal master.
 
@@ -1101,6 +1111,26 @@ def resolved_deal(row: Row, lists: ReferenceLists) -> Field:
         if not found and who:
             found = _deals_named(who, currency, lists.deal_names)
             reason = f"{who!r} is a deal in the master list" if found else ""
+
+    if found and _paying_for_another_vehicle(row):
+        # `OBO PMT FRM ... ON BEHALF OF ...` going out. The fund settling the payment is
+        # not the one acquiring anything, so the deal on the other side of it is not its
+        # deal. The receiving fund books it; this side books to its own operations, and
+        # the working file's name for that bucket is on none of the reference lists, so a
+        # reviewer supplies it rather than the matcher inventing one.
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="needs_review",
+            evidence=Evidence(
+                text=(
+                    "this fund paid on behalf of another vehicle, so the deal belongs to "
+                    "whoever received the money rather than to this account"
+                ),
+                source_list="Deal & Position Master List",
+            ),
+            alternatives=[Alternative(value=d, confidence=0.3) for d in found[:4]],
+        )
 
     if not found:
         return Field(

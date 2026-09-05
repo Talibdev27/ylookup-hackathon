@@ -485,6 +485,30 @@ def test_a_deal_holding_only_equity_is_not_where_a_loan_was_drawn() -> None:
     assert stages.resolved_deal(row, lists).value == "Fenwick Lender - GBP"
 
 
+def test_paying_on_another_vehicles_behalf_is_not_our_deal() -> None:
+    """Both legs of these are in the sample and they book differently. The fund that
+    receives the money takes on the deal; the fund that paid it out acquired nothing, and
+    the working file's name for its own operations bucket is on no reference list -- so
+    the row goes up with the deal we would have proposed kept beside it."""
+    lists = ReferenceLists(
+        legal_entities=["Nordvik Infrastructure Advanced Bioenergy Fund II SCSp"],
+        related_parties=["NI ABF I SCSp"],
+        deal_names=["Cephalus Biogas 001 Limited - EUR"],
+        project_codes=[{"Project Code": "Cephalus"}],
+    )
+    row = a_row(
+        account_name="NI ABF II SCSP",
+        narrative_raw="NI ABF I SCSP, OBO PMT FRM NI ABF II SCSP ON BEHALF OF NI ABF II "
+                      "CO-INVEST SCSP, TO NI ABF I SCSP FOR ACQ OF 1 SHARE, IN CEPHALUS BIOGAS 001 LTD",
+    )
+    for name in ("matched_legal_entity", "pulled_out_project_code", "matched_project_code",
+                 "pulled_out_sender_beneficiary", "matched_sender_beneficiary", "classification"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    result = stages.resolved_deal(row, lists)
+    assert result.value is None and result.status == "needs_review"
+    assert [a.value for a in result.alternatives] == ["Cephalus Biogas 001 Limited - EUR"]
+
+
 def test_positions_that_fit_equally_well_go_to_a_reviewer_together() -> None:
     """When the bank text does not say which security was bought, both candidates go up
     under the human's own heading rather than one being picked at random."""
