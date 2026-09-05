@@ -56,6 +56,12 @@ both summing to 0.00) before trusting the aggregate — **every one of the 52 le
 entities common to both files ties to the cent.** The 27 source entities not yet in this
 tranche are correctly excluded rather than forced to tie against nothing.
 
+*(built)* Uploading a new tranche now works: `POST /gl-upload` accepts a GL workbook
+and/or a loader workbook — either alone leaves the other on whatever it already was,
+bundled sample or a previous upload, the same per-file independence dataset 1's workspace
+uses — and `GET /api/gl-migration/flags` re-runs the five checks above against whichever
+pair is current. See `src/gl_migration/workspace.py` and `tests/test_gl_workspace.py`.
+
 Still open on dataset 2: `Movements Rec`, the administrator's own pre-upload
 reconciliation sheet, isn't read yet — the items still open on it would be a sixth flag
 type, not yet built.

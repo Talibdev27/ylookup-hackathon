@@ -259,8 +259,11 @@ finding behind every one:
 `src/gl_migration/analyze()`, exposed at `GET /api/gl-migration/flags`, is a parallel
 analyzer for dataset 02 (the investor-level GL → loader workbooks) rather than a
 `src/checks/` entry — it does not share `Row`, so it has its own small package instead of
-forcing a second signature into the checking agent's registry. See `docs/ARCHITECTURE.md`
-§9 and `docs/analyst-flags.md` §3 for its five checks and their counts.
+forcing a second signature into the checking agent's registry. `src/gl_migration/workspace.py`
+gives it the same "uploaded wins, bundled sample is the fallback" shape as `src/spine/workspace.py`,
+so `POST /gl-upload` runs the same five checks against a real GL and/or loader workbook
+rather than only ever the bundled sample. See §9 and `docs/analyst-flags.md` §3 for the
+five checks and their counts.
 
 The pipeline persists execution facts as well as findings, so zero flags after one
 completed check is distinguishable from a check that never ran. Findings are also
@@ -290,10 +293,18 @@ contract, `/rows/<id>/decide` records a matcher-field answer, and
 `/api/flags/<flag_id>/decide` records a check disposition. `/export.csv` streams the
 reviewed queue, including findings and their dispositions, out.
 
+Dataset 02 gets its own, independent pair of routes rather than reusing any of the above:
+`/gl-upload` accepts a GL workbook and/or a loader workbook (either alone leaves the
+other on whatever it already was — bundled sample or a previous upload) under
+`data/gl-workspace/`, and `GET /api/gl-migration/flags` runs `src/gl_migration/analyze()`
+against whichever pair is current, cached per distinct pair of files by resolved path and
+mtime so a fresh upload invalidates the cache without an explicit clear call.
+
 **State is local files, not a managed service**, on purpose. `data/store.sqlite` keeps a
 content-hashed version history of uploaded workbooks and extracted PDF pages and mirrors
 the current check findings. `data/rows.json`, `data/flags.json`, `data/decisions.json`,
-`data/flag-decisions.json`, and `data/workspace/` are the active run and review state.
+`data/flag-decisions.json`, `data/workspace/`, and `data/gl-workspace/` are the active run
+and review state.
 This is a deliberate hosting decision (`docs/TASK-hosting.md`) — one instance, one worker,
 and a persistent disk. Two workers could race while replacing active files or serve
 different review state.

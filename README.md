@@ -141,8 +141,10 @@ A separate frontend can consume `GET /api/review` and submit automated-flag deci
 [`docs/FRONTEND-HANDOFF.md`](docs/FRONTEND-HANDOFF.md).
 
 `GET /api/gl-migration/flags` covers a second, unrelated dataset — the investor-level GL to
-loader upload (`src/gl_migration/`) — with its own five checks and 220 real findings. See
-[`docs/analyst-flags.md`](docs/analyst-flags.md) §3.
+loader upload (`src/gl_migration/`) — with its own five checks and 220 real findings on
+the bundled sample. `/gl-upload` takes a real GL and/or loader workbook for a new
+tranche, the same "uploaded wins, bundled sample is the fallback" shape `/upload` uses.
+See [`docs/analyst-flags.md`](docs/analyst-flags.md) §3.
 
 ## Where every number on screen comes from
 
@@ -195,7 +197,7 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/exporter.py` | The reviewed queue as a spreadsheet, carrying matcher answers, check findings and reviewer decisions |
 | `src/extraction/` | Document-agnostic PDF reading, with a Tesseract OCR fallback for a page with no text layer |
 | `src/checks/` | Registry, runner and six automated inconsistency checks over already-structured records — see `docs/analyst-flags.md` |
-| `src/gl_migration/` | A separate analyzer for the investor-level GL → loader dataset, exposed at `GET /api/gl-migration/flags` |
+| `src/gl_migration/` | A separate analyzer and upload workspace for the investor-level GL → loader dataset, exposed at `/gl-upload` and `GET /api/gl-migration/flags` |
 | `src/reports/` | Balance sheet and income statement, rolled up directly from the `DIU`/`CoA` sheets — not the matcher's output |
 | `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
 | `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |

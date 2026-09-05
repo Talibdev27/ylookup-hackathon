@@ -23,6 +23,7 @@ from werkzeug.utils import secure_filename
 
 from src import exporter, pipeline
 from src.gl_migration import analyze as gl_migration
+from src.gl_migration import workspace as gl_workspace
 from src.reports import statements as report_statements
 from src.spine import workspace
 from src.ui import labels
@@ -526,36 +527,49 @@ def _public_gl_migration_flag(flag) -> dict:
     }
 
 
-_GL_MIGRATION_CACHE: list[dict] | None = None
+_GL_MIGRATION_CACHE: dict[tuple, list[dict]] = {}
+
+
+def _gl_migration_cache_key(space: gl_workspace.GLWorkspace) -> tuple:
+    """Resolved path + mtime for each file, so a fresh upload invalidates the cache
+    automatically -- no explicit "clear" call needed anywhere the files can change."""
+    return (
+        str(space.gl.resolve()), space.gl.stat().st_mtime,
+        str(space.output.resolve()), space.output.stat().st_mtime,
+    )
+
+
+def run_gl_migration(space: gl_workspace.GLWorkspace | None = None) -> list[dict]:
+    """The public flags for whichever GL/loader pair is current, computed once per
+    distinct pair of files and cached after that -- the 34,000-row source GL takes a few
+    seconds to read."""
+    space = space or gl_workspace.current()
+    key = _gl_migration_cache_key(space)
+    if key not in _GL_MIGRATION_CACHE:
+        flags = gl_migration.analyze(space.gl, space.output)
+        _GL_MIGRATION_CACHE[key] = [_public_gl_migration_flag(flag) for flag in flags]
+    return _GL_MIGRATION_CACHE[key]
 
 
 @app.get("/api/gl-migration/flags")
 def api_gl_migration_flags():
     """Dataset 02 (investor-level GL -> loader), analyzed independently of the bank
     statement pipeline above -- a different dataset, a different shape of data (no
-    per-transaction `Row`, no reference workbook upload), so it gets its own endpoint
-    rather than being forced through `/api/review`. See `src/gl_migration/analyze.py`.
+    per-transaction `Row`), so it gets its own endpoint rather than being forced through
+    `/api/review`. See `src/gl_migration/analyze.py`.
 
-    Cached at module level after the first call: the 34,000-row source GL takes a few
-    seconds to read, and this dataset does not change at runtime -- there is no upload
-    route for it in this pass, unlike the bank-statement side.
+    Reads whatever `gl_workspace.current()` says is current: an uploaded GL and/or loader
+    workbook from `/gl-upload` if one was saved, the bundled sample otherwise -- the same
+    "uploaded wins, bundled is the fallback" the bank-statement side uses.
     """
-    global _GL_MIGRATION_CACHE
-    if _GL_MIGRATION_CACHE is None:
-        try:
-            _GL_MIGRATION_CACHE = [_public_gl_migration_flag(flag) for flag in gl_migration.analyze()]
-        except FileNotFoundError as error:
-            return jsonify({"error": f"dataset 02 not found: {error}"}), 404
+    try:
+        flags = run_gl_migration()
+    except FileNotFoundError as error:
+        return jsonify({"error": f"dataset 02 not found: {error}"}), 404
     by_check: dict[str, int] = {}
-    for flag in _GL_MIGRATION_CACHE:
+    for flag in flags:
         by_check[flag["check"]] = by_check.get(flag["check"], 0) + 1
-    return jsonify(
-        {
-            "flags_found": len(_GL_MIGRATION_CACHE),
-            "by_check": by_check,
-            "flags": _GL_MIGRATION_CACHE,
-        }
-    )
+    return jsonify({"flags_found": len(flags), "by_check": by_check, "flags": flags})
 
 
 @app.get("/export.csv")
@@ -698,6 +712,55 @@ def upload():
 def rebuild() -> None:
     """Re-run the pipeline over whatever is now in the workspace."""
     pipeline.run(workspace.current())
+
+
+@app.get("/gl-upload")
+def gl_upload_form():
+    space = gl_workspace.current()
+    try:
+        flags = run_gl_migration(space)
+        error = None
+    except FileNotFoundError as failure:
+        flags, error = [], request.args.get("error") or str(failure)
+    by_check: dict[str, int] = {}
+    for flag in flags:
+        by_check[flag["check"]] = by_check.get(flag["check"], 0) + 1
+    return render_template(
+        "gl_upload.html",
+        space=space,
+        flags_found=len(flags),
+        by_check=[(labels.check_label(check), count) for check, count in sorted(by_check.items())],
+        error=error or request.args.get("error"),
+    )
+
+
+@app.post("/gl-upload")
+def gl_upload():
+    """Take this tranche's GL and/or loader workbook. Either alone is a real case --
+    a new GL against a loader/mapping that has not changed, or a corrected loader against
+    a GL already uploaded -- so both are optional, but at least one has to be present."""
+    gl_file = request.files.get("gl")
+    output_file = request.files.get("loader")
+    has_gl = bool(gl_file and gl_file.filename)
+    has_output = bool(output_file and output_file.filename)
+
+    if not has_gl and not has_output:
+        return redirect(url_for("gl_upload_form", error="Choose at least one workbook to upload."))
+    for label_text, upload_file, present in (
+        ("GL workbook", gl_file, has_gl),
+        ("loader workbook", output_file, has_output),
+    ):
+        if present and not upload_file.filename.lower().endswith((".xlsx", ".xlsm")):
+            return redirect(url_for(
+                "gl_upload_form", error=f"The {label_text} has to be an Excel file (.xlsx)."
+            ))
+
+    gl_workspace.save(gl_file if has_gl else None, output_file if has_output else None)
+    try:
+        run_gl_migration()
+    except FileNotFoundError as failure:
+        return redirect(url_for("gl_upload_form", error=str(failure)))
+    return redirect(url_for("gl_upload_form"))
 
 
 @app.post("/reset")

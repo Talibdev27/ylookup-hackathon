@@ -50,8 +50,10 @@ maps to operating/investing/financing activities, so it stays open.
 against dataset 02, 34,000 source rows across 43 columns, reproducing its four known
 gaps as real flags (verified counts: 4 legal entities, 16 deals, 198 investors, 2 mapping
 gaps) plus a new check confirming every one of the 52 legal entities common to both files
-ties to the cent after mapping. See `docs/analyst-flags.md` §3. Still open: `Movements
-Rec`, the administrator's own pre-upload reconciliation sheet, isn't read yet.
+ties to the cent after mapping. `POST /gl-upload` takes a real GL and/or loader workbook
+for a new tranche, no longer just the bundled sample — see `src/gl_migration/workspace.py`
+and `docs/analyst-flags.md` §3. Still open: `Movements Rec`, the administrator's own
+pre-upload reconciliation sheet, isn't read yet.
 
 ## More checks
 

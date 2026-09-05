@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Load statements</title>
+<title>GL &rarr; loader migration</title>
 <style>
   :root { --bg:#fbfbfa; --card:#fff; --fg:#1a1a19; --muted:#6f6f6a; --line:#e6e4e0;
           --accent:#0f5f52; --accent-soft:#e8f2ef; --warn:#8a5a12; --warn-soft:#fdf5e6;
@@ -42,12 +42,18 @@
              animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   a { color:var(--accent); }
+  table { width:100%; border-collapse:collapse; font-size:14.5px; }
+  th, td { text-align:left; padding:9px 4px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:13px; }
+  td.count { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .total { font-size:14.5px; color:var(--muted); margin:0 0 14px; }
+  .total b { color:var(--fg); }
 </style>
 
 <header>
   <div>
-    <h1>Load bank statements</h1>
-    <span><a href="/gl-upload">GL &rarr; loader migration</a> &middot; <a href="/">Back to the review queue</a></span>
+    <h1>GL &rarr; loader migration</h1>
+    <a href="/">Back to the review queue</a>
   </div>
 </header>
 
@@ -55,60 +61,70 @@
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   <p class="lede">
-    Drop in this week's bank statements and we will work through them: who each payment
-    was to or from, which project it belongs to, and how it should be booked. Anything we
-    are not sure about comes back to you as a short list to check.
+    A separate dataset from the bank-statement review queue above: the investor-level
+    general ledger and the loader/upload template it maps to. Uploading a new tranche's
+    workbooks here re-runs the same checks the bundled sample was built against.
   </p>
 
-  <form method="post" action="/upload" enctype="multipart/form-data">
+  <section class="step">
+    <p class="total">
+      {% if space.is_bundled %}
+        Showing the bundled sample. <b>{{ flags_found }}</b> finding{{ '' if flags_found == 1 else 's' }}.
+      {% else %}
+        Showing your uploaded workbook{{ '' if space.gl_is_bundled or space.output_is_bundled else 's' }}.
+        <b>{{ flags_found }}</b> finding{{ '' if flags_found == 1 else 's' }}.
+      {% endif %}
+    </p>
+    {% if by_check %}
+      <table>
+        <tr><th>Check</th><th></th></tr>
+        {% for label, count in by_check %}
+          <tr><td>{{ label }}</td><td class="count">{{ count }}</td></tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  </section>
+
+  <form method="post" action="/gl-upload" enctype="multipart/form-data">
     <section class="step">
-      <h2>1 · This week's bank statements</h2>
-      <p>One PDF per account. Select as many as you like.</p>
-      <input type="file" name="statements" accept="application/pdf,.pdf" multiple required>
+      <h2>
+        Investor-level GL
+        {% if not space.gl_is_bundled %}
+          <span class="status ok">Uploaded</span>
+        {% else %}
+          <span class="status todo">Bundled sample</span>
+        {% endif %}
+      </h2>
+      <p>This tranche's general ledger — one row per journal transaction line.</p>
+      <input type="file" name="gl" accept=".xlsx,.xlsm">
     </section>
 
     <section class="step">
       <h2>
-        2 · Your reference lists
-        {% if space.workbook %}
-          <span class="status ok">Already set up</span>
+        Loader / upload template
+        {% if not space.output_is_bundled %}
+          <span class="status ok">Uploaded</span>
         {% else %}
-          <span class="status todo">Needed</span>
+          <span class="status todo">Bundled sample</span>
         {% endif %}
       </h2>
-      {% if space.workbook %}
-        <p>
-          Already loaded, so you can leave this empty. Only upload again if your funds,
-          investors, suppliers or deals have changed.
-        </p>
-      {% else %}
-        <p>
-          The Excel workbook holding your funds, related parties, investors, suppliers and
-          deals. Without it we can read the statements but cannot tell you who anyone is.
-        </p>
-      {% endif %}
-      <input type="file" name="workbook" accept=".xlsx,.xlsm">
+      <p>The reference and verified loader workbook — upload template plus its entity, deal and investor crosswalks.</p>
+      <input type="file" name="loader" accept=".xlsx,.xlsm">
     </section>
 
-    <button type="submit">Read the statements</button>
+    <button type="submit">Run the checks</button>
     <div class="working">
       <span class="spinner"></span>
-      <span class="working-text">Reading them now — this takes a few seconds.</span>
+      <span class="working-text">Reading the workbooks now — the GL sheet alone runs to tens of thousands of rows.</span>
     </div>
     <p class="note">
-      Nothing leaves this machine. Files are kept in the app's own folder and replaced the
-      next time you upload.
-      {% if statement_count %}
-        Currently loaded: {{ statement_count }} statement{{ '' if statement_count == 1 else 's' }}.
-      {% endif %}
+      Upload either workbook on its own to replace just that half — the other stays as it
+      was. Nothing leaves this machine.
     </p>
   </form>
 </main>
 
 <script>
-  // Pressing the button used to look identical to nothing happening. On a sleeping free
-  // instance the first request wakes the server, which can take the better part of a
-  // minute, and a silent button is indistinguishable from a broken one.
   const form = document.querySelector('form');
   const working = document.querySelector('.working');
   const text = document.querySelector('.working-text');
@@ -116,9 +132,8 @@
   form.addEventListener('submit', () => {
     form.querySelector('button[type="submit"]').disabled = true;
     working.classList.add('on');
-    // If it is still going after ten seconds, say why rather than leaving them guessing.
     setTimeout(() => {
-      text.textContent = 'Still reading — the server may have been asleep. Give it a moment.';
-    }, 10000);
+      text.textContent = 'Still reading — a 34,000-row GL sheet takes a few seconds.';
+    }, 8000);
   });
 </script>

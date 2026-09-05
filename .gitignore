@@ -10,3 +10,4 @@ data/*.json
 node_modules/
 data/decisions.json
 data/workspace/
+data/gl-workspace/
