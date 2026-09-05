@@ -67,6 +67,40 @@ def open_questions(row: dict) -> list[tuple[str, dict]]:
     return [(key, f) for key, f in row.get("fields", {}).items() if f.get("status") != "auto"]
 
 
+def flagged_discrepancy(row: dict) -> bool:
+    """True when the client's documented rule contradicts their own booking.
+
+    ADR 0001: the `Process` sheet books a credit row to `Cash - Received`, and every row
+    in the working file is booked `Cash - Disbursed`. `cash_leg_transtype` reproduces the
+    file and marks the disagreement rather than silently agreeing with it, so a cash leg
+    that is not `auto` is exactly one of those rows. Reading the status keeps this honest
+    about where the flag comes from; matching on the evidence wording would break the
+    moment somebody improves the sentence.
+    """
+    field = row.get("fields", {}).get("cash_leg_transtype") or {}
+    return field.get("status", "auto") != "auto"
+
+
+def amount(row: dict) -> float:
+    """What the payment is worth, whichever side it landed on."""
+    raw = row.get("raw") or {}
+    return abs(raw.get("credit") or raw.get("debit") or 0.0)
+
+
+def queue_rank(entry: dict) -> tuple[int, float]:
+    """Reviewer attention is the scarce thing, so spend it in order of what it is worth.
+
+    Statement order opened the queue on a 44-cent bank charge asking four questions it
+    could not answer, and left the seven-figure rows carrying the Process-sheet
+    contradiction below the fold. Flagged rows first, then by amount: the reviewer meets
+    the rows where we have something to tell them before the ones where we are only
+    asking. Presentation only -- decisions are keyed by row, so nothing downstream can
+    notice the order.
+    """
+    row = entry["row"]
+    return (0 if flagged_discrepancy(row) else 1, -amount(row))
+
+
 def counterparty_suggestions() -> list[str]:
     """Every name a counterparty could legitimately be.
 
@@ -105,6 +139,8 @@ def index():
             if not show_all:
                 continue
         queue.append({"row": row, "questions": questions, "answered": answered})
+
+    queue.sort(key=queue_rank)
 
     needs_review = sum(1 for r in rows if open_questions(r))
     return render_template(
