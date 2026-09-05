@@ -64,3 +64,20 @@ equity balance.
 The review queue assumes you already know what you are looking at. A landing step would
 take a folder of documents, say what it found in each, and hand the reviewer a queue per
 document rather than one flat list.
+
+The narrower version of this is real and near: somebody opening the deployed URL cold --
+a judge, a fund manager sent a link -- lands on "Transactions to check" and 88 cards,
+with nothing on screen saying what the tool is or whose problem it solves.
+
+**Decided 5 September, and deliberately not built this weekend.** When it is built:
+
+- **A band at the top of the queue, not a landing page.** Two sentences, the 23-row
+  finding, a link to the video. Moving the queue to its own route to make room for a
+  front page changes the URL the demo is filmed against, and the video was the scarce
+  thing that weekend, not the screen.
+- **No motion.** The scoring rubric's UI criterion reads "Clean and considered. A
+  non-technical fund manager is the user. No AI slop." A tool that looks like a working
+  tool is the stronger answer, and the one number worth setting large is the finding
+  itself, which does the work a hero animation imitates.
+- **Link the video, never embed it.** An embed that fails to load on the judged URL is
+  worse than no video section.
