@@ -89,6 +89,25 @@ def test_classification_asks_rather_than_guessing_the_majority_value() -> None:
     assert result.value is None and result.status == "needs_review"
 
 
+def test_classification_reads_what_the_bank_says_the_payment_was_for() -> None:
+    """With no counterparty to go on, the narrative decides -- and the phrase that
+    decided it is highlighted on the raw text the reviewer is looking at."""
+    row = a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT")
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    result = stages.classification(row, LISTS)
+    assert result.value == "Other" and result.status == "auto"
+    start, end = result.evidence.span
+    assert row.raw.narrative_raw[start:end] == "CHARGES FOR"
+
+
+def test_a_fee_line_that_also_waives_a_charge_is_still_a_fee() -> None:
+    """Rule order is the rule. `CHARGE WAIVED` marks the fund's own transfers, but it
+    also appears on fee lines, so the fee test has to run first."""
+    row = a_row(narrative_raw="COMMISSION EUR 6,00, 47223IZ05W0Z CHARGE WAIVED")
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    assert stages.classification(row, LISTS).value == "Other"
+
+
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
     row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)

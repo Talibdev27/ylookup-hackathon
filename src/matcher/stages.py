@@ -185,6 +185,65 @@ def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
     raise NotImplementedError("W2")
 
 
+# Reference lists that answer `classification` on their own, and how to say so to a fund
+# manager. Measured on the ground truth at 6/6, 5/5 and 6/7.
+DECISIVE_LIST = {
+    "Deal & Position Master List": ("Investment", "the deal list"),
+    "Investor Master List": ("Related Party", "the investor list"),
+    "Vendor Master List": ("Vendor", "the vendor list"),
+}
+
+# What the bank writes when it says what a payment was for, in priority order, with the
+# reason a reviewer reads. First phrase found wins, so the order is the rule: a fee line
+# that also says CHARGE WAIVED is a fee, and `SHORT TERM LOAN:` is a loan between two
+# funds rather than a loan into a holding company, so it has to be tested before `LOAN:`.
+NARRATIVE_RULES: list[tuple[tuple[str, ...], str, str]] = [
+    (("COMMISSION", "CHARGES FOR"), "Other", "the bank is charging its own fee here"),
+    (("CREDIT INTEREST",), "Other", "this is interest the bank paid on the account"),
+    (
+        ("INTERNAL TRANSFER", "INTERNAL FX TRANSFER"),
+        "Internal",
+        "the bank text calls this an internal transfer",
+    ),
+    (
+        ("PMT FRM",),
+        "Investment Transfer",
+        "the bank text describes a payment from one fund to another",
+    ),
+    (
+        ("SHORT TERM LOAN", "SHORT-TERM LOAN"),
+        "Investment Transfer",
+        "the bank text describes a short-term loan between two funds",
+    ),
+    (
+        ("EQUITY:", "LOAN:", "PAYMENT FROM"),
+        "Investment",
+        "the bank text describes money going into an investment",
+    ),
+    (
+        ("CHARGE WAIVED",),
+        "Internal",
+        "the bank waived its charge, which it does on the fund's own transfers",
+    ),
+]
+
+
+def _first_phrase(
+    narrative: str, rules: list[tuple[tuple[str, ...], str, str]]
+) -> tuple[str, str, str] | None:
+    """The first rule phrase present in the narrative, with what it means.
+
+    Searched against the raw text rather than the normalised form, so the phrase that
+    decided the answer can be highlighted on the exact characters the reviewer sees.
+    """
+    haystack = narrative.upper()
+    for phrases, value, reason in rules:
+        for phrase in phrases:
+            if phrase in haystack:
+                return phrase, value, reason
+    return None
+
+
 def classification(row: Row, lists: ReferenceLists) -> Field:
     """Stage 4. What kind of transaction this is.
 
@@ -204,21 +263,23 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
     `Investor Master List -> Related Party` reads wrong and is not. These are the fund's
     own feeder vehicles: they are listed as investors and booked as related parties.
 
-    The other two outcomes -- matched in `Related Party Master`, or matched nowhere at
-    all -- carry 82 of the 100 rows and split four ways each. Those are the narrative's
-    job, and until that is written they go to a reviewer rather than take the majority
-    value: guessing `Other` would score well and lie about it.
+    The other 82 rows -- matched in `Related Party Master`, or matched nowhere at all --
+    split four ways each, and there the bank's own words decide: `NARRATIVE_RULES` reads
+    what the text says the payment was for. A related party with nothing in the text
+    saying why keeps `Related Party` as a proposal for a reviewer.
+
+    Together that is 93 of 100. The three it gets wrong are the three the human marked
+    `Review`, which is their own way of saying they could not tell either; there is no
+    signal in those rows that separates them from the ones next to them. Four rows fall
+    through to a reviewer with no value at all. Returning the majority value `Other`
+    would have scored 32 more and misrepresented a guess as an answer, which is the
+    failure this whole product argues against.
     """
     matched = row.fields.get("matched_sender_beneficiary")
     source = matched.evidence.source_list if matched and matched.value else ""
 
-    decisive = {
-        "Deal & Position Master List": ("Investment", "the deal list"),
-        "Investor Master List": ("Related Party", "the investor list"),
-        "Vendor Master List": ("Vendor", "the vendor list"),
-    }
-    if source in decisive:
-        value, where = decisive[source]
+    if source in DECISIVE_LIST:
+        value, where = DECISIVE_LIST[source]
         return Field(
             value=value,
             confidence=0.9,
@@ -230,21 +291,54 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
             ),
         )
 
-    reason = (
-        f"{matched.value!r} is a related party, and related parties are booked several "
-        "different ways depending on what the payment was for"
-        if source
-        else "we could not tell who this was to or from, so we cannot say what kind of "
-        "transaction it is"
-    )
+    narrative = row.raw.narrative_raw
+    found = _first_phrase(narrative, NARRATIVE_RULES)
+    if found:
+        phrase, value, reason = found
+        start = narrative.upper().index(phrase)
+        return Field(
+            value=value,
+            confidence=0.85,
+            status="auto",
+            evidence=Evidence(
+                span=(start, start + len(phrase)),
+                text=reason,
+                source_list="Narrative",
+            ),
+        )
+
+    if source == "Related Party Master":
+        # A related party with nothing in the text saying what the payment was for. The
+        # counterparty is the only evidence there is, so it is the proposal -- but a
+        # proposal made on that little goes to a reviewer rather than straight through.
+        return Field(
+            value="Related Party",
+            confidence=0.5,
+            status="needs_review",
+            evidence=Evidence(
+                span=matched.evidence.span,
+                text=(
+                    f"{matched.value!r} is a related party, but the bank text does not "
+                    "say what the payment was for"
+                ),
+                source_list="Related Party Master",
+            ),
+            alternatives=[
+                Alternative(value="Internal", confidence=0.2),
+                Alternative(value="Investment Transfer", confidence=0.2),
+            ],
+        )
+
     return Field(
         value=None,
         confidence=0.0,
         status="needs_review",
         evidence=Evidence(
-            span=matched.evidence.span if matched else None,
-            text=reason,
-            source_list=source or "Narrative",
+            text=(
+                "we could not tell who this was to or from, and the bank text does not "
+                "say what kind of payment it is"
+            ),
+            source_list="Narrative",
         ),
     )
 
