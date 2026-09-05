@@ -183,11 +183,13 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/matcher/` | The ten Process-sheet stages, `ReferenceLists`, and `score.py` |
 | `src/ui/` | The exception-first review queue, and the wording it puts on screen |
 | `src/exporter.py` | The reviewed queue as a spreadsheet, carrying matcher answers, check findings and reviewer decisions |
-| `src/extraction/` | Document-agnostic PDF reading and Excel output, for document types beyond statements |
+| `src/extraction/` | Document-agnostic PDF reading, with a Tesseract OCR fallback for a page with no text layer |
 | `src/checks/` | Registry, runner and automated inconsistency checks over already-structured records |
+| `src/reports/` | Balance sheet and income statement, rolled up directly from the `DIU`/`CoA` sheets — not the matcher's output |
 | `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
 | `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
-| `docs/` | The architecture, the roadmap, the decision records, and the task briefs. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us |
+| `docs/` | The architecture, the roadmap, and the decision records. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us; `FRONTEND-HANDOFF.md` is the JSON API contract for a separate frontend; `backend-integration.md` covers the `truss/` Next.js app that actually consumes it |
+| `truss/` | A Next.js frontend, three of its pages wired to the real backend above — see `docs/backend-integration.md` |
 
 ## Requirements
 

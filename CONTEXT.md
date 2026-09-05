@@ -109,6 +109,13 @@ the same job as the matcher: the matcher asks "what is this?", a check asks "doe
 add up?". `footing.py`'s balance-continuity check is the first one, and the shape any
 later check follows: `(records) -> list[Flag]`.
 
+**Period movements statement** (`src/reports/statements.py`) — a balance sheet or income
+statement rolled up from the `DIU` and `CoA` sheets directly, not from the matcher's
+output. Called a movements statement rather than a balance sheet outright because there
+is no opening balance anywhere in this data — every figure is this week's activity, not a
+point-in-time position. **Ties** — the expanded accounting equation, Assets = Liabilities
++ Capital + Revenues - Expenses, checked on every call rather than assumed.
+
 ## Architecture vocabulary
 
 See the `codebase-design` skill. In short: a **module** is deep when a lot of behaviour

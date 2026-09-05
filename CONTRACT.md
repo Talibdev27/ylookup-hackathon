@@ -46,15 +46,20 @@ and writes this shape. It is fixed: change it only by agreement with all four ow
 4. **`alternatives` is what the reviewer chooses from** when rejecting a proposal. Populate it
    even when confident — an empty list means the reviewer has to type.
 
-## The eight fields to fill
+## The ten fields to fill
+
+In `stages.REGISTRY` order — see `src/contract.py`'s `FIELD_KEYS`, the one place this
+list is authoritative. All ten are written; `where-the-points-go.md` has today's scores.
 
 | Field key | Difficulty | Human filled (of 100) |
 |---|---|---|
-| `matched_legal_entity`         | free        | 100 |
-| `cash_leg_transtype`           | free        | 100 |
-| `counterparty_transtype`       | medium      | 100 |
-| `matched_project_code`         | medium      | 100 (30 are "Flag for review - no project match") |
-| `classification`               | medium      | 100 |
-| `pulled_out_sender_beneficiary`| hard        |  55 |
-| `matched_sender_beneficiary`   | hard        |  48 |
-| `resolved_position` / `resolved_deal` | hard |  30 |
+| `matched_legal_entity`          | free        | 100 |
+| `pulled_out_project_code`       | medium      |  25 |
+| `matched_project_code`          | medium      | 100 (30 are "Flag for review - no project match") |
+| `pulled_out_sender_beneficiary` | hard        |  55 |
+| `matched_sender_beneficiary`    | hard        |  48 |
+| `classification`                | medium      | 100 |
+| `cash_leg_transtype`            | free        | 100 |
+| `counterparty_transtype`        | medium      | 100 |
+| `resolved_deal`                 | hard        |  30 |
+| `resolved_position`             | hard        |  30 |
