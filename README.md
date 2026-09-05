@@ -76,6 +76,7 @@ answer different questions:
 | `src/pipeline.py` | — | Run the whole thing: `run(workspace) → PipelineResult` |
 | `src/spine/` | W1 | Reads the workbook and the statement PDFs |
 | `src/matcher/` | W2 | The Process-sheet stages, `ReferenceLists`, and `score.py` |
+| `src/exporter.py` | — | The reviewed queue as a spreadsheet, with who decided each answer |
 | `src/ui/` | W3 | Exception-first review queue |
 | `src/journal/` | W4 | Stage 6: two DIU lines per Batch ID |
 | `docs/` | all | One brief per workstream |

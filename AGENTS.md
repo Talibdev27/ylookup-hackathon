@@ -35,6 +35,10 @@ an accountant: *"'CHARGES FOR 2' is not on any of the reference lists"*. Field n
 tracebacks and confidence floats stay on the console. `src/ui/labels.py` holds every word
 the screen shows, so wording changes land there rather than in templates.
 
+**A reviewer's decision beats the matcher, including a decision to give up.** Giving up
+clears the value rather than falling back to the proposal, because the person has already
+rejected it. `src/exporter.py` is where that rule lives.
+
 **`unresolved` is a good answer.** Say so when the machine cannot tell, and carry the near
 misses as `alternatives`. A confident wrong value is the failure this product argues
 against — the fund manager in the interviews stopped trusting output nobody checked.

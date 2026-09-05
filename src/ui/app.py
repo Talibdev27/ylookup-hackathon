@@ -15,10 +15,10 @@ import json
 import tempfile
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
-from src import pipeline
+from src import exporter, pipeline
 from src.spine import workspace
 from src.ui import labels
 
@@ -122,6 +122,23 @@ def index():
         # the difference is the whole first impression: one says the product has nothing
         # to do, the other says it is waiting for your statements.
         has_data=bool(rows),
+        export=exporter.summary(rows, decisions),
+    )
+
+
+@app.get("/export.csv")
+def export_csv():
+    """The reviewed queue as a file. Everything, not just the rows that were checked --
+    the 28 the matcher was confident about are answers too, and a part-reviewed export is
+    still useful."""
+    rows = load_rows()
+    if not rows:
+        return redirect(url_for("upload_form", error="There is nothing to export yet."))
+    body = exporter.to_csv(rows, load_decisions())
+    return Response(
+        body,
+        mimetype="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="reviewed-transactions.csv"'},
     )
 
 

@@ -89,6 +89,9 @@
   <div class="bar">
     <h1>Transactions to check</h1>
     <a href="/upload" style="font-size:14px; font-weight:600">Load new statements</a>
+    {% if has_data %}
+      <a href="/export.csv" style="font-size:14px; font-weight:600">Download as a spreadsheet</a>
+    {% endif %}
     <span class="sub">
       {{ remaining }} left to check ·
       {{ reviewed }} done ·
@@ -207,6 +210,9 @@
       <div class="empty">
         <strong>Nothing left to check.</strong>
         Every transaction has either been filled in automatically or reviewed by you.
+        <p style="margin-top:18px">
+          <a href="/export.csv">Download all {{ export.rows }} transactions as a spreadsheet</a>
+        </p>
       </div>
     {% else %}
       <div class="empty">
@@ -217,6 +223,14 @@
       </div>
     {% endif %}
   {% endfor %}
+  {% if has_data %}
+    <p style="margin-top:28px; color:var(--muted); font-size:14px">
+      <a href="/export.csv">Download all {{ export.rows }} transactions as a spreadsheet</a> —
+      {{ export.reviewed }} checked by you, {{ export.outstanding }} still open. Every row
+      says whether you or the system decided it.
+    </p>
+  {% endif %}
+
   <datalist id="counterparties">
     {% for name in suggestions %}<option value="{{ name }}">{% endfor %}
   </datalist>
