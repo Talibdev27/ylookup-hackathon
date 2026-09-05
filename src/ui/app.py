@@ -34,16 +34,24 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
+# Every route a cross-origin frontend actually calls. Not just /api/*: /rows/<id>/decide
+# predates the /api prefix and was kept at its original path deliberately (see
+# FRONTEND-HANDOFF.md, "existing route preserved") for the server-rendered UI, which
+# means it needs this header too, or a browser fetch to it fails before Flask ever sees
+# it -- caught by actually clicking the button in a real browser, not just curling it
+# server-side, which has no CORS to enforce in the first place.
+CROSS_ORIGIN_PREFIXES = ("/api/", "/rows/")
+
+
 @app.after_request
 def _allow_cross_origin_reads(response):
     """The Next.js frontend runs as its own server on its own origin -- localhost:3000
     talking to this app's localhost:5001 in dev, and its own deployed URL talking to
     this app's Render URL in production. Neither is the same origin as this Flask app,
-    so a browser blocks the fetch entirely without this header. `/api/*` only: the
-    server-rendered pages under `/` are navigated to directly, never fetched cross-origin,
-    and don't need it.
+    so a browser blocks the fetch entirely without this header. Server-rendered pages
+    under `/` are navigated to directly, never fetched cross-origin, and don't need it.
     """
-    if request.path.startswith("/api/"):
+    if request.path.startswith(CROSS_ORIGIN_PREFIXES):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"

@@ -98,6 +98,23 @@ def test_api_routes_carry_cors_headers_but_pages_do_not() -> None:
     assert "Access-Control-Allow-Origin" not in page_response.headers
 
 
+def test_rows_decide_also_carries_cors_headers() -> None:
+    """Regression: /rows/<id>/decide predates the /api prefix and was missed the first
+    time this was written -- a real browser click against it failed with a CORS error
+    that no server-side curl test would ever have caught, since curl enforces no CORS."""
+    from src.ui.app import DECISIONS
+
+    client = _client()
+    try:
+        response = client.post(
+            "/rows/0/decide",
+            json={"choice": "unresolved", "field": "not-a-real-field"},
+        )
+        assert response.headers.get("Access-Control-Allow-Origin") == "*"
+    finally:
+        DECISIONS.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     test_companies_lists_the_four_real_funds()
     test_balance_sheet_for_a_real_company()
@@ -107,4 +124,5 @@ if __name__ == "__main__":
     test_review_scoped_per_company_sums_to_the_whole_dataset()
     test_review_rejects_an_unknown_company()
     test_api_routes_carry_cors_headers_but_pages_do_not()
+    test_rows_decide_also_carries_cors_headers()
     print("all companies API checks pass")
