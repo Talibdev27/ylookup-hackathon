@@ -12,8 +12,12 @@ and improve it after. There is no reason to be submitting at 11:58.
 `README.md` carries the live URL, today's scoreboard, the Process-sheet finding and the
 provenance table. Two things are left:
 
-1. **Add the video link.** In the **Try it** section, directly under the Live bullet:
-   `- **Video:** <link>`
+1. **Add the video link, in two places.**
+   - `README.md`, **Try it** section, under the Live bullet: `- **Video:** <link>`
+   - The app itself: set `YLOOKUP_VIDEO_URL` in the Render dashboard, or paste the link
+     into `VIDEO_URL` at the top of `src/ui/app.py`. A "Watch the demo" button then
+     appears on the front page. Until it is set the page simply offers no video, so
+     there is nothing to undo if the link arrives late or never.
 2. **Follow your own README literally, from a clean clone.** Anything that needs a step the
    README does not mention is a bug — the judges said the minimum bar is a README plus one
    command they can execute.

@@ -12,6 +12,7 @@ Run:  python3 serve.py
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,11 @@ app.jinja_env.globals.update(
     value_preview=labels.value_preview,
     is_long_value=labels.is_long_value,
 )
+
+# The demo video, once one exists. Paste the link here, or set YLOOKUP_VIDEO_URL on the
+# host. Until then the front page offers no video at all rather than a link that goes
+# nowhere -- everything it says stands on its own without one.
+VIDEO_URL = os.environ.get("YLOOKUP_VIDEO_URL") or None
 
 # The pipeline owns where these live and when they are invalidated.
 ROWS = pipeline.ROWS
@@ -297,6 +303,10 @@ def index():
         checks=state["checks"],
         space=workspace.current(),
         suggestions=counterparty_suggestions(),
+        # Counted, never hardcoded: on the sample data this is the 23 rows of ADR 0001,
+        # but a client's own statements will have their own number, or none.
+        flagged=sum(1 for r in rows if flagged_discrepancy(r)),
+        video_url=VIDEO_URL,
         # No rows at all is not the same as everything reviewed. On a fresh deployment
         # the difference is the whole first impression: one says the product has nothing
         # to do, the other says it is waiting for your statements.
