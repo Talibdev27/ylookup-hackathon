@@ -69,6 +69,50 @@ def test_matched_sender_beneficiary_reads_the_stage_before_it() -> None:
     assert result.value == "Trentbeck Audit - Lu", "master lists carry office suffixes"
 
 
+def test_the_counterparty_is_the_party_that_is_not_this_account() -> None:
+    """On a transfer between two of the fund's own vehicles the bank leads with an alias
+    of the account the statement belongs to, so the leading name is the wrong answer."""
+    row = a_row(
+        account_name="NI ABF I SCSP",
+        narrative_raw="NORDVIK I.A.B. FUND I, TFR+ PMT FRM NI ABF II SCSP TO NI ABF I, SCSP FOR ACQ",
+    )
+    lists = ReferenceLists(related_parties=["NI ABF II SCSp", "NI ABF I SCSp"])
+    result = stages.pulled_out_sender_beneficiary(row, lists)
+    assert result.value == "NI ABF II SCSP", "the payer, not the account being read"
+    start, end = result.evidence.span
+    assert row.raw.narrative_raw[start:end] == "NI ABF II SCSP"
+
+
+def test_a_leading_name_that_is_identifiable_is_left_alone() -> None:
+    """The rule above only fires when the name we read is on none of the lists. A
+    narrative that names its counterparty up front must not be second-guessed."""
+    row = a_row()
+    assert stages.pulled_out_sender_beneficiary(row, LISTS).value == "TRENTBECK AUDIT LUXEMBOURG"
+
+
+def test_a_different_legal_form_is_the_same_company() -> None:
+    """`LTD` against `Limited` defeats every comparison in `match`: not equal, neither
+    opens the other, and the token overlap breaks on the last word."""
+    row = a_row(narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, /GB14NRVB35403891305213")
+    lists = ReferenceLists(related_parties=["NI V Azurite HoldCo Limited"])
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    assert stages.matched_sender_beneficiary(row, lists).value == "NI V Azurite HoldCo Limited"
+
+
+def test_the_deal_master_settles_a_spelling_the_lists_disagree_about() -> None:
+    """38 entities sit on more than one sheet spelled differently. Only the spelling
+    moves -- the list it was found on is what `classification` reads, so that stays."""
+    row = a_row(narrative_raw="52443473437109, NI DRACONIS HOLDCO I SCSP")
+    lists = ReferenceLists(
+        related_parties=["NI DRACONIS HOLDCO I SCSp"],
+        deal_names=["NI Draconis HoldCo I SCSp"],
+    )
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    result = stages.matched_sender_beneficiary(row, lists)
+    assert result.value == "NI Draconis HoldCo I SCSp", "the deal master's spelling"
+    assert result.evidence.source_list == "Related Party Master", "but found on the related parties"
+
+
 def test_classification_reads_the_list_the_counterparty_matched_against() -> None:
     """A vendor is a Vendor. The stage never looks at the name, only at where it was
     found -- which is the whole reason `matched_sender_beneficiary` records the list."""

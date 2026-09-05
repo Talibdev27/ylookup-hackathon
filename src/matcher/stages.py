@@ -108,32 +108,65 @@ def pulled_out_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
     pulled from a narrative is still literally present in the source PDF, so this is
     extraction rather than inference -- and the span is what the review screen highlights.
     """
-    found = counterparty.extract(row.raw.narrative_raw)
-    if not found:
+    narrative = row.raw.narrative_raw
+    found = counterparty.extract(narrative)
+    if found:
+        fragment, span = found
+        value = counterparty.strip_clause(counterparty.complete(fragment, narrative)) or fragment
+        truncated = value != fragment
+
+        # The leading name is the counterparty on most rows, and on a transfer between two
+        # of the fund's own vehicles it is an alias of this very account. When the name we
+        # read is on none of the lists but the text names two parties, the one that is not
+        # this account is the better answer -- checked here rather than in the matching
+        # stage, so both columns say the same thing about the same row.
+        if not counterparty.match(value, lists.counterparty_lists(), currency=row.raw.currency):
+            instead = counterparty.other_party(
+                narrative, [row.raw.account_name, _own_legal_entity(row)]
+            )
+            if instead and counterparty.match(
+                instead[0], lists.counterparty_lists(), currency=row.raw.currency
+            ):
+                return Field(
+                    value=instead[0],
+                    confidence=0.8,
+                    status="auto",
+                    evidence=Evidence(
+                        span=instead[1],
+                        text=(
+                            "the bank text names two parties and this is the one that is "
+                            "not this account"
+                        ),
+                        source_list="Narrative",
+                    ),
+                )
         return Field(
-            value=None,
-            confidence=0.0,
-            status="unresolved",
-            evidence=Evidence(text="no name found in the bank text", source_list="Narrative"),
-        )
-    fragment, span = found
-    value = counterparty.complete(fragment, row.raw.narrative_raw)
-    truncated = value != fragment
-    return Field(
-        value=value,
-        confidence=0.75 if truncated else 0.9,
-        status="auto",
-        evidence=Evidence(
-            span=span,
-            text=(
-                "the bank cut this name off at a line break; the full form appears later "
-                "in the same text"
-                if truncated
-                else "read from the bank text"
+            value=value,
+            confidence=0.75 if truncated else 0.9,
+            status="auto",
+            evidence=Evidence(
+                span=span,
+                text=(
+                    "the bank cut this name off at a line break; the full form appears "
+                    "later in the same text"
+                    if truncated
+                    else "read from the bank text"
+                ),
+                source_list="Narrative",
             ),
-            source_list="Narrative",
-        ),
+        )
+    return Field(
+        value=None,
+        confidence=0.0,
+        status="unresolved",
+        evidence=Evidence(text="no name found in the bank text", source_list="Narrative"),
     )
+
+
+def _own_legal_entity(row: Row) -> str:
+    """The full name of the account this statement belongs to, if it has been worked out."""
+    mine = row.fields.get("matched_legal_entity")
+    return mine.value if mine and mine.value else ""
 
 
 def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
@@ -155,6 +188,23 @@ def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
 
     hits = counterparty.match(name, lists.counterparty_lists(), currency=row.raw.currency)
     if not hits:
+        # Nothing matched on the spelling. Before giving up, try again with the legal form
+        # reduced -- `... TopCo Limited` and `... TOPCO LTD` are one company.
+        loose = counterparty.match_by_legal_form(name, lists.counterparty_lists())
+        if loose:
+            return Field(
+                value=loose.value,
+                confidence=loose.confidence,
+                status="auto",
+                evidence=Evidence(
+                    span=pulled.evidence.span if pulled else None,
+                    text=(
+                        f"the bank text names {name!r}, which is the same company written "
+                        "with a different legal form"
+                    ),
+                    source_list=loose.source_list,
+                ),
+            )
         return Field(
             value=None,
             confidence=0.0,
@@ -167,7 +217,7 @@ def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
         )
     best = hits[0]
     return Field(
-        value=best.value,
+        value=lists.canonical_spelling(best.value),
         confidence=best.confidence,
         status="auto" if best.confidence >= 0.85 else "needs_review",
         evidence=Evidence(
