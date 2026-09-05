@@ -26,6 +26,8 @@ app.jinja_env.globals.update(
     direction=labels.direction,
     pretty_date=labels.pretty_date,
     certainty=labels.certainty,
+    statement_label=labels.statement_label,
+    highlight=labels.highlight,
 )
 
 ROWS = Path("data/rows.json")

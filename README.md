@@ -29,6 +29,19 @@ flask --app src.ui.app run --port 5001
 
 Point `YLOOKUP_DATA` at the dataset directory if it is not in `~/Downloads`.
 
+## Where every number on screen comes from
+
+Nothing is asserted without a source. Each row in the review queue carries its own
+provenance, because "can you show us where it came from" is the question being asked.
+
+| On screen | Source |
+|---|---|
+| Account, date, amount, bank text | The statement PDF, named with its page number on every row |
+| Highlighted text inside the bank narrative | Character offsets into the raw narrative, carried on every field as `evidence.span` |
+| "Why we are asking" | The `Process` sheet in the client's workbook, cited by stage |
+| Counterparty, project, deal | The workbook master lists, cited by list name |
+| The scoreboard | `Staging Sheet` -- the human's own 100 answers |
+
 ## How it is scored
 
 `python -m src.matcher.score` reports two different numbers per field, because they

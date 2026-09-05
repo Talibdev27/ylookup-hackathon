@@ -7,7 +7,10 @@ changed without touching templates or logic.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
+
+from markupsafe import Markup, escape
 
 # Field key -> (what to call it, what the reviewer is actually being asked)
 FIELD_LABELS: dict[str, tuple[str, str]] = {
@@ -68,3 +71,51 @@ def certainty(confidence: float, status: str) -> str:
     if confidence >= 0.75:
         return "Fairly confident"
     return "Not sure — please check"
+
+
+def statement_label(pdf_name: str, page: int | None = None) -> str:
+    """'20260331_NI_V_SCSP_CALDER_EUR_030041.pdf' ->
+    'NI V SCSP  ·  Calder EUR account ...0041  ·  statement of 31 Mar 2026, page 2'
+
+    The reviewer needs to be able to open the actual statement and find this line. The
+    filename is the only thing that gets them there, so it is translated rather than
+    hidden -- and shown verbatim on hover."""
+    stem = pdf_name[:-4] if pdf_name.lower().endswith(".pdf") else pdf_name
+    parts = stem.split("_")
+    if len(parts) < 4:
+        return pdf_name
+    raw_date, account = parts[0], parts[-1]
+    currency, bank = parts[-2], parts[-3]
+    entity = " ".join(parts[1:-3])
+    try:
+        when = pretty_date(f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}")
+    except (ValueError, IndexError):
+        when = raw_date
+    tail = f", page {page}" if page else ""
+    return (
+        f"{entity}  ·  {bank.capitalize()} {currency} account \u2026{account[-4:]}"
+        f"  ·  statement of {when}{tail}"
+    )
+
+
+def highlight(text: str, spans: list[tuple[int, int] | None]) -> Markup:
+    """Wrap the evidence spans in <mark>. Spans index into the raw narrative, which is why
+    normalisation keeps an index map -- see matcher/normalise.py.
+
+    Overlapping spans are merged, and everything is escaped before any markup is added."""
+    clean = [tuple(s) for s in spans if s and len(s) == 2 and s[1] > s[0]]
+    if not clean:
+        return Markup(escape(text))
+    merged: list[list[int]] = []
+    for start, end in sorted(clean):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    out, cursor = [], 0
+    for start, end in merged:
+        out.append(escape(text[cursor:start]))
+        out.append(Markup("<mark>") + escape(text[start:end]) + Markup("</mark>"))
+        cursor = end
+    out.append(escape(text[cursor:]))
+    return Markup("").join(out)
