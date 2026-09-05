@@ -140,6 +140,43 @@ def test_counterparty_transtype_inherits_the_doubt_of_the_stage_before_it() -> N
     assert result.value is None and result.status == "needs_review"
 
 
+PROJECTS = ReferenceLists(
+    project_codes=[{"Project Code": "Azurite Array"}, {"Project Code": "Cephalus"},
+                   {"Project Code": "NIP Platform Solutions ApS"}],
+)
+
+
+def test_matched_project_code_recovers_the_reports_own_spelling() -> None:
+    """The bank writes AZURITE, the project report carries `Azurite Array`."""
+    row = a_row(narrative_raw="EQUITY: FROM NI V SCSP TO NI V AZURITE HOLDCO LTD. PROJECT AZURITE.")
+    assert stages.pulled_out_project_code(row, PROJECTS).value == "AZURITE"
+    assert stages.matched_project_code(row, PROJECTS).value == "Azurite Array"
+
+
+def test_a_bank_fee_books_to_overhead_without_a_lookup() -> None:
+    """31 rows have no project because the counterparty is the bank itself."""
+    row = a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT")
+    assert stages.matched_project_code(row, PROJECTS).value == "OH - Bank Fees"
+
+
+def test_a_project_code_in_the_payee_position_is_not_a_project() -> None:
+    """Several project codes are also counterparty names. Without the guard, a payee
+    called NIP Platform Solutions ApS is read as the project it was booked against, and
+    a row the human flagged comes back with a confident wrong code."""
+    row = a_row(narrative_raw="29000231,84819265, NIP PLATFORM SOLUTIONS APS")
+    result = stages.matched_project_code(row, PROJECTS)
+    assert result.value == "Flag for review - no project match"
+
+
+def test_flagging_for_review_is_an_answer_not_a_blank() -> None:
+    """30 of the 100 rows carry this literal string. It is the sheet's way of saying a
+    human has to pick, so the stage says it out loud rather than leaving the cell empty."""
+    row = a_row(narrative_raw="52443473437109-3528152584, TRENTBECK AUDIT LUXEMBOURG")
+    result = stages.matched_project_code(row, PROJECTS)
+    assert result.value == "Flag for review - no project match"
+    assert result.status == "needs_review"
+
+
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
     row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
@@ -179,7 +216,7 @@ def test_a_broken_stage_is_a_failure_not_an_unwritten_stage(monkeypatch=None) ->
 def test_an_unwritten_stage_is_reported_once_and_skipped() -> None:
     payload = [{"row_id": 1, "source": {}, "raw": a_row().raw.__dict__.copy(), "fields": {}}]
     _, unwritten, failures = apply_stages(payload, LISTS)
-    assert "matched_project_code" in unwritten
+    assert "resolved_position" in unwritten
     assert not failures
 
 

@@ -23,8 +23,6 @@ def test_running_the_sample_workspace() -> None:
     assert result.sheets == 15
     assert result.stages_total == 10
     assert set(result.unwritten) == {
-        "pulled_out_project_code",
-        "matched_project_code",
         "resolved_deal",
         "resolved_position",
     }, "the columns still to be written -- naming them says which, where a count did not"

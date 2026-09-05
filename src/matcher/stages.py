@@ -8,6 +8,7 @@ before touching the hard ones, so there is always a working pipeline to demo.
 """
 from __future__ import annotations
 
+import re
 from typing import Callable
 
 from src.contract import Alternative, Evidence, Field, Row
@@ -178,11 +179,155 @@ def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
     )
 
 
+# The bank names a project in the clear: "... TO NI V AZURITE HOLDCO LTD. PROJECT AZURITE."
+# Everything up to the full stop is the name; the sentence after it is the amount.
+PROJECT_NAMED = re.compile(r"PROJECT[:\s]+([A-Z0-9][A-Z0-9\- ]*)")
+
+# Overhead codes the bank's own wording settles, before any lookup happens. These are 31
+# of the 100 rows and none of them names a project, because there is no project: the
+# counterparty is the bank itself.
+OVERHEAD_PHRASES = [
+    (("CREDIT INTEREST",), "OH - Interest Income", "this is interest the bank paid"),
+    (("COMMISSION", "CHARGES FOR"), "OH - Bank Fees", "this is a fee the bank charged"),
+]
+
+NO_PROJECT = "Flag for review - no project match"
+
+
+def _named_project(narrative: str) -> str | None:
+    """The project as the bank wrote it, from `PROJECT <name>`."""
+    found = PROJECT_NAMED.search(" ".join(narrative.upper().split()))
+    if not found:
+        return None
+    return found.group(1).split(".")[0].strip(" .,-") or None
+
+
+def _lookup(word: str | None, codes: list[str]) -> str | None:
+    """The project report's own spelling of a name the bank abbreviated.
+
+    The bank writes `AZURITE`, the report carries `Azurite Array`; the shortest code the
+    bank's word opens is the answer. Exact matches are preferred over prefixes so
+    `Ranfjord` cannot be answered with `Ranfjord II`.
+    """
+    if not word:
+        return None
+    target = counterparty.fold(word)
+    exact = [c for c in codes if counterparty.fold(c) == target]
+    opened = [c for c in codes if counterparty.fold(c).startswith(target)]
+    hits = exact or opened
+    return min(hits, key=len) if hits else None
+
+
+def _project_named_anywhere(narrative: str, codes: list[str]) -> str | None:
+    """A project code written somewhere in the narrative other than as `PROJECT <name>`.
+
+    Six rows name the project only in passing -- `... FOR ACQ 100PER OF SHARES IN
+    CEPHALUS BIOGAS 001 LTD` -- so the `PROJECT` keyword misses them.
+
+    The guard is the whole trick. Several project codes are also counterparty names, and
+    without it `NIP PLATFORM SOLUTIONS APS` in the payee position gets read as a project:
+    three rows the human flagged came back with a confident wrong code. So a code that
+    only appears inside the counterparty is not a project reference. It costs the one row
+    whose project really is its counterparty (`NI RANFJORD II SCSP`), which is the right
+    side of that trade -- a missed code is flagged, a wrong one is booked.
+    """
+    found = counterparty.extract(narrative)
+    payee = counterparty.fold(found[0]) if found else ""
+    haystack = f" {counterparty.fold(narrative)} "
+    for code in sorted(codes, key=lambda c: -len(counterparty.fold(c))):
+        folded = counterparty.fold(code)
+        if len(folded) < 5 or not folded[0].isalpha():
+            continue  # too short or too numeric to be named by accident
+        if f" {folded} " in haystack and (not payee or folded not in payee):
+            return code
+    return None
+
+
 def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 3. Careful: this is not a plain lookup. In the ground truth, 30 of 100 rows
-    carry the literal string 'Flag for review - no project match' and 26 carry
-    'OH - Bank Fees'. Reproduce that vocabulary rather than leaving blanks."""
-    raise NotImplementedError("W2")
+    """Stage 3. Which project code this books to.
+
+    Not a plain lookup, and the vocabulary is the client's: 30 of the 100 rows carry the
+    literal string `Flag for review - no project match`, which is an answer rather than a
+    blank -- it is the sheet's way of saying a human has to pick. Reproducing it is the
+    point, so this stage says it out loud rather than leaving the cell empty.
+
+    Three sources, in order:
+
+    1. **The bank's own wording**, for the 31 overhead rows. A commission or a charge is
+       `OH - Bank Fees`, credit interest is `OH - Interest Income`. There is no project
+       because the counterparty is the bank.
+    2. **`PROJECT <name>`**, which the bank writes in the clear on 24 rows, looked up
+       against the 586-row project report to recover its spelling: `AZURITE` is
+       `Azurite Array`.
+    3. **A code named in passing**, for the rows that mention the project without the
+       keyword -- guarded, because some project codes are also counterparty names.
+
+    Anything left is flagged, and flagged is a real answer here rather than a shrug.
+    """
+    narrative = row.raw.narrative_raw
+    upper = narrative.upper()
+
+    for phrases, value, reason in OVERHEAD_PHRASES:
+        if any(phrase in upper for phrase in phrases):
+            return Field(
+                value=value,
+                confidence=0.95,
+                status="auto",
+                evidence=Evidence(text=reason, source_list="Project Code Report"),
+            )
+
+    codes = [r["Project Code"] for r in lists.project_codes if r.get("Project Code")]
+
+    named = _named_project(narrative)
+    code = _lookup(named, codes)
+    if code:
+        start = upper.find(named)
+        return Field(
+            value=code,
+            confidence=0.92,
+            status="auto",
+            evidence=Evidence(
+                span=(start, start + len(named)) if start >= 0 else None,
+                text=f"the bank text names project {named!r}",
+                source_list="Project Code Report",
+            ),
+        )
+
+    code = _project_named_anywhere(narrative, codes)
+    if code:
+        return Field(
+            value=code,
+            confidence=0.7,
+            status="needs_review",
+            evidence=Evidence(
+                text=(
+                    f"the bank text mentions {code!r}, but not as the project this was "
+                    "booked against"
+                ),
+                source_list="Project Code Report",
+            ),
+        )
+
+    if "INTERNAL TRANSFER" in upper and not (row.raw.credit or 0) > 0:
+        return Field(
+            value="OVERHEAD",
+            confidence=0.6,
+            status="needs_review",
+            evidence=Evidence(
+                text="an internal transfer out, which the working file books to overhead",
+                source_list="Project Code Report",
+            ),
+        )
+
+    return Field(
+        value=NO_PROJECT,
+        confidence=0.5,
+        status="needs_review",
+        evidence=Evidence(
+            text="the bank text does not name a project, so somebody has to pick one",
+            source_list="Project Code Report",
+        ),
+    )
 
 
 # Reference lists that answer `classification` on their own, and how to say so to a fund
@@ -350,8 +495,34 @@ def resolved_position(row: Row, lists: ReferenceLists) -> Field:
 
 
 def pulled_out_project_code(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 3. The project word as the bank wrote it. Filled on 25 of 100 rows."""
-    raise NotImplementedError("W2")
+    """Stage 3. The project word as the bank wrote it, before any lookup.
+
+    Filled on 25 of 100 rows, and kept separate from the code it resolves to for the same
+    reason the sender/beneficiary pair is split: extraction and matching fail differently,
+    and a reviewer looking at a wrong code needs to see whether the bank was misread or
+    the master list was.
+    """
+    named = _named_project(row.raw.narrative_raw)
+    if not named:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text="the bank text does not name a project", source_list="Narrative"
+            ),
+        )
+    start = row.raw.narrative_raw.upper().find(named)
+    return Field(
+        value=named,
+        confidence=0.9,
+        status="auto",
+        evidence=Evidence(
+            span=(start, start + len(named)) if start >= 0 else None,
+            text="read from the bank text",
+            source_list="Narrative",
+        ),
+    )
 
 
 # What the counterpart line books to, given what kind of transaction it is and which way
