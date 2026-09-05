@@ -9,61 +9,74 @@ than reasoned about from the code.
 | `matched_legal_entity` | 100/100 | — |
 | `cash_leg_transtype` | 100/100 | — |
 | `pulled_out_project_code` | 25/25 | — |
-| `classification` | 93/100 | Four rows lack enough evidence and stay unresolved. Three rows the human labelled `Review` are classified as plausible `Vendor`, `Internal` or `Investment` transactions. |
-| `matched_project_code` | 92/100 | Six expected `OVERHEAD` rows are conservatively flagged for review. Two disagree outright: one reads `SARDONYX` out of the narrative where the human flagged the row, and one is an `OH - BOARD MEMBER FE` overhead code with no handle in the bank text. |
-| `counterparty_transtype` | 92/100 | Seven of the eight are inherited: the classification behind them is wrong or missing, and this stage is a consequence of it. The eighth is an internal FX row the human books as a credit correction where the amount's direction says debit. |
-| `pulled_out_sender_beneficiary` | 45/55 | Nine of the ten are formatting, not identity: a trailing full stop (`NI V KALVIK TOPCO LTD` against `LTD.`), the bank's line-wrap comma (`NORDVIK  INFRASTRUCTURE` against `NORDVIK, INFRASTRUCTURE`), or a name the bank truncated (`S.A R` against `S.A R.L.`). The tenth is a row where the human typed the word `Review` into the name column. |
-| `resolved_deal` | 25/30 | Three expect `ZZZ Operations EUR` / `GBP`, which appear nowhere in the deal master. One human answer is a position string in the deal column. One Fenwick row has five deals carrying the project where the human listed four, with no rule visible for the one they dropped. |
-| `matched_sender_beneficiary` | 31/48 | Three families. Six rows read `NI ABF II SCSP`, which is on no list, and resolve to the co-invest vehicle where the human chose the full fund. Five want `NIP P/S` where we find another entity of the same group, with nothing in the text separating them. Three are one company under a spelling two sheets disagree about. Eleven of the fourteen go to a reviewer rather than booking through. |
-| `resolved_position` | 13/30 | Many deals hold several equally valid positions, and the system returns a shortlist instead of guessing. On 13 further rows that shortlist contains the human's answer, but an exact-match scorer counts it wrong. |
+| `matched_sender_beneficiary` | 45/48 | Three rows name a group entity by an in-house alias — `NIP LIT` for `NIP P/S`, `NIP CINNABAR APS` for `NIP PLATFORM SOLUTIONS APS`. Neither alias appears anywhere in the workbook. Nothing is booked wrong: **its disagreement count is zero**, and all three are declined rather than guessed. |
+| `matched_project_code` | 99/100 | One payment to an individual books to `OH - BOARD MEMBER FE`. That the payee is a board member is not in the bank text or any reference list. |
+| `classification` | 98/100 | Two rows, both below. |
+| `counterparty_transtype` | 98/100 | Both are inherited from those same two rows; the stage adds no error of its own. |
+| `pulled_out_sender_beneficiary` | 53/55 | One row where the human wrote `Review` instead of a name. One trailing full stop, on which the human is self-contradictory — see below. |
+| `resolved_deal` | 26/30 | Three want `ZZZ Operations EUR`/`GBP`, a bucket that exists in no reference list. One human answer is a position string in the deal column. |
+| `resolved_position` | 26/30 | Three follow those `ZZZ Operations` deals. One is a shortlist that differs from the human's by a single deal. |
+
+---
+
+## The three kinds of remaining miss
+
+Separating these matters, because only the first is a defect.
+
+### Matcher limits — none left that we can see
+
+Every remaining mismatch below is either evidence that does not exist or a contradiction
+in the client's own file. There is no row where the bank text and the reference data
+between them determine the answer and the matcher fails to reach it.
+
+### Evidence that is not in the data (8 rows)
+
+| Rows | Wanted | Why it cannot be derived |
+|---|---|---|
+| 19, 62, 67 | `NIP P/S`, `NIP PLATFORM SOLUTIONS APS` | `NIP LIT` and `NIP CINNABAR APS` appear **nowhere** in the workbook — not on any master list, not in the bank account report, not in the project codes. The link is in-house knowledge. This is what a client-maintained alias list is for; it is not something the statement or the reference data can supply. |
+| 65 | `OH - BOARD MEMBER FE`, `Other`, `Accounts Payable` | The counterparty is a person's name. Nothing marks them as a board member. |
+| 6 | `Review` on three columns | The narrative is a multi-leg loan distribution naming two entities and repaying principal in a third direction. The human gave up on it. Our answer, `NI ABF I DevCo ApS` on the vendor list, is a real name really in the text — it is a defensible reading, not a wrong one, and the human's `Review` is a judgement we have no signal for. |
+
+### Contradictions in the client's own file (5 rows)
+
+| Rows | The contradiction |
+|---:|---|
+| 33, 34, 86 | Booked to `ZZZ Operations EUR` / `GBP`. That string occurs in exactly two places in the workbook: the `Staging Sheet` and the `DIU ` loader output — both of which are the answers. It is an admin bucket that exists in their process and not in the reference data they gave us. **We decline these rather than invent the name.** |
+| 1 | The deal column holds a *position* string, `Cephalus Biogas 001 Limited - EUR (Halstead (Funding Loan))`. Every other row puts a deal there. |
+| 86 | Structurally identical to rows 94 and 97 — same account, same `SHORT TERM LOAN: FROM NI V SCSP TO NI V CN SCSP`, differing only in which project is named. Those two get real deals; this one gets the admin bucket, with nothing in the text to separate them. |
+| 96 | The human keeps the bank's trailing full stop here (`NI V FENWICK HOLDCO LTD.`) and drops it on row 50 (`NI GMF II COOPERATIEF U.A`), from statements written the same way. Either rule scores one and loses the other. |
+| 97 | Our Fenwick shortlist and the human's differ by one deal out of five. |
 
 ---
 
 ## What the scoreboard cannot see
 
-`resolved_position` reads worst and is not the worst. Counted by what a reviewer is
-actually handed:
+A column's `wrong` count mixes "booked something incorrect" with "asked a person", and
+only the first is a defect. Across all ten columns there are now **7 disagreements**, and
+`matched_sender_beneficiary` — the hardest column on the sheet — has **none**: every row
+it does not reproduce is one it declines.
 
-| Outcome | Rows |
-|---|---|
-| exact answer | 13 |
-| shortlist, **and the human's answer is on it** | 13 |
-| shortlist, answer not on it | 3 |
-| single answer, wrong | 1 |
+`resolved_position` reads 26/30, and the four it misses are all downstream of a deal that
+does not exist in the reference data.
 
-On 26 of the 30 rows the reviewer gets either the answer or a two-to-four item list with
-the answer on it. Picking the first candidate would score about six more and turn thirteen
-honest shortlists into coin tosses presented as answers.
+Three rows are answered with a shortlist rather than a single value, under the client's own
+heading `Review - multiple positions:`. That is what their working file says where the same
+thing happened to them.
 
-The same distinction applies across the board. `matched_sender_beneficiary` disagrees on
-fourteen rows and sends eleven of them to a person. A column's `wrong` count mixes
-"booked something incorrect" with "asked for help", and only the first is a defect.
-
-## Three findings that belong to the client, not to us
-
-These are not gaps in the matching. They are things in the client's own working file that
-nothing here can derive, and each one is worth showing them:
-
-1. **`ZZZ Operations` is booked on three rows and exists in no master list.** It occurs in
-   exactly two places in the workbook — the `Staging Sheet` and the `DIU ` output. A value
-   that reaches the journal without appearing in any reference list is precisely the thing
-   nobody checks.
-2. **38 entities sit on more than one sheet spelled differently** — `NI DRACONIS HOLDCO I
-   SCSp` against `NI Draconis HoldCo I SCSp`, `NI V Kalvik TopCo Limited.` against the
-   same name without its full stop. Whichever is written out, some sheet disagrees.
-3. **A position string appears in the deal column** on one row.
+---
 
 ## A note on reading this table
 
-An earlier draft of it attributed the one `pulled_out_project_code` miss to the
-counterparty guard in `matched_project_code`. The guard was not involved. The bank had
-wrapped a line between the keyword and the name — `PROJECT, RANFJORD II.` — and the
-pattern did not allow the comma. One character fixed it and the column went to 25/25.
+An earlier draft attributed the one `pulled_out_project_code` miss to the counterparty
+guard in `matched_project_code`. The guard was not involved. The bank had wrapped a line
+between the keyword and the name — `PROJECT, RANFJORD II.` — and the pattern did not allow
+the comma. One character fixed it and the column went to 25/25.
 
-That is the second plausible-sounding explanation in this work to survive until somebody
-ran it; the first is recorded in [counterparty-matching.md](counterparty-matching.md),
-where expanding the bank's abbreviations is the obvious fix and scores worse. Reasons for
-missing points are worth checking against the output before they are written down.
+That is one of several plausible-sounding explanations in this work that survived until
+somebody ran it. `counterparty-matching.md` records two more: expanding the bank's
+abbreviations globally is the obvious fix and scores worse, and applying the other-party
+rule to every row costs nine matches. Reasons for missing points are worth checking
+against the output before they are written down.
 
 ## Reproducing
 
@@ -75,5 +88,8 @@ The per-row detail behind every line above comes from joining `data/rows.json` t
 `Staging Sheet` with `src.matcher.score.align`, which pairs on narrative, amount, bank
 reference and account number — position alone lines up only 11 of the 100 rows.
 
+`score.py` is the only module that reads the `Staging Sheet`, and nothing in `src/`
+imports it. No stage can see the answers.
+
 See also [counterparty-matching.md](counterparty-matching.md) and
-[deal-resolution.md](deal-resolution.md) for how the four hard columns work.
+[deal-resolution.md](deal-resolution.md) for how the hard columns work.

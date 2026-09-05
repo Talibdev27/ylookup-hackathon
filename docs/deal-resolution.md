@@ -5,8 +5,8 @@ both on the same 30 of 100 rows.
 
 | Column | Human | Now |
 |---|---|---|
-| `resolved_deal` | 30 filled | 25 / 30 agree |
-| `resolved_position` | 30 filled | 13 / 30 agree, 13 more shortlisted |
+| `resolved_deal` | 30 filled | 26 / 30 agree |
+| `resolved_position` | 30 filled | 26 / 30 agree |
 
 A deal is the investment a payment belongs to. A position is the specific holding under
 that deal — the same deal usually has an equity position and a funding-loan position, and
@@ -89,71 +89,55 @@ allowed to produce nothing.
 
 ---
 
-## When the answer is not in the bank text
+## When two positions both fit
 
-That leaves exactly one position on 13 rows. On the rest it does not, and the reason is
-worth being precise about, because it is not a gap in the matching.
+The three filters leave exactly one position on many rows and two or four on the rest.
+Where several remain, two things decide, and neither is in the bank text -- both come out
+of the master's own shape, so both are proposed at `needs_review` with the rejected
+candidates kept beside them.
 
-```
-Cephalus Biogas 001 Limited - EUR (Halstead (Equity))
-Cephalus Biogas 001 Limited - EUR (Equity)
-```
-
-Both are real positions. Same deal, same legal entity, same security type, both live in
-the master. The narrative reads:
+**The most specific holding wins.** The master usually carries the same holding twice: a
+roll-up at the deal, and the underlying asset named inside it.
 
 ```
-NI ABF I SCSP, PMT FRM NI ABF II SCSP TO NI ABF I, SCSP FOR ACQ 100PER OF SHARES IN,
-CEPHALUS BIOGAS 001 LTD REL TOTAL ...
+Cephalus Biogas 001 Limited - EUR (Equity)                 <- the roll-up
+Cephalus Biogas 001 Limited - EUR (Halstead (Equity))      <- the asset inside it
 ```
 
-Nothing in it says `Halstead`. No amount of matching recovers a word that was never
-written, and the human's answer is not reconstructible from what the bank sent.
+The payment belongs to the named one. The roll-up is where it lands afterwards.
 
-So those rows carry **every candidate** under the human's own heading:
+**Except on the paying side of a transfer between two of the fund's own vehicles.** Both
+legs of four such transfers are in the sample, and they book at different levels: the fund
+receiving the money takes on the underlying holding, and the fund paying is funding the
+other's deal rather than acquiring anything itself, so it books at the deal. Same
+narrative, opposite sign, different answer -- which is why direction alone does not
+explain it and `classification` has to be read too.
 
-```
-Review - multiple positions: <position> | <position>
-```
+**And a deal only counts if it holds the security that was bought.** A project financed
+through several vehicles is not financed the same way through all of them. One of the five
+Fenwick deals holds only equity; the payment is a short-term loan, so it is not one of this
+payment's deals. That is the rule behind the human listing four of the five.
 
-That string is not invented. It is what their working file says on the Fenwick row, where
-eighteen positions fitted and they wrote all of them out rather than choosing.
-
-### What that costs, and what it buys
-
-| Outcome | Rows |
-|---|---|
-| exact answer | 13 |
-| shortlist, **and the human's answer is on it** | 13 |
-| shortlist, human's answer not on it | 3 |
-| one answer, wrong | 1 |
-
-The scoreboard reads this as 13/30 with 17 wrong, which undersells it: on **26 of the 30
-rows** the reviewer is either handed the answer or handed a two-to-four item list with the
-answer on it. The one remaining single wrong answer is inherited from a wrong deal.
-
-Picking the first candidate instead of listing them would score roughly six more and turn
-thirteen honest shortlists into thirteen coin tosses presented as answers.
-
----
+The bank names the security three ways -- as a heading (`EQUITY:`), as what was bought
+(`ACQ 100PER OF SHARES`), and in brackets after the company (`... 001 LTD (EQUITY)`). The
+third is easy to miss because the word abuts its punctuation.
 
 ## What it still gets wrong
 
-Five deals miss. Four are confident, and none of the four is a matching failure:
+Four rows on each column, and none of them is a matching failure.
 
 | Rows | Why |
 |---:|---|
-| 3 | the human booked `ZZZ Operations EUR` / `GBP` — **strings that appear nowhere in the deal master** |
-| 1 | the human put a *position* string in the deal column: `Cephalus Biogas 001 Limited - EUR (Halstead (Funding Loan))` |
-| 1 | Fenwick: five deals carry the project, the human listed four, with no rule visible for the one they dropped |
+| 33, 34 | The fund settled a payment **on another vehicle's behalf**. It acquired nothing, so the deal belongs to whoever received the money -- the receiving legs of these same transfers are in the sample and do carry it. The working file books this side to an operations bucket named in no reference list, so the row is declined rather than answered with an invented value. |
+| 86 | Booked to `ZZZ Operations GBP`, and structurally identical to rows 94 and 97 -- same account, same `SHORT TERM LOAN: FROM NI V SCSP TO NI V CN SCSP`, differing only in the project named. Those two get real deals. |
+| 1 | The human put a *position* string in the deal column. |
+| 97 | Our Fenwick shortlist and theirs differ by one deal of five. |
 
-`ZZZ Operations` occurs in exactly two places in the workbook — the `Staging Sheet` and the
-`DIU ` output. It is an admin bucket that exists in their process and not in the reference
-data they gave us, so nothing here can derive it. That is worth showing the client rather
-than working around: a value that reaches the journal but is not in any master list is the
-kind of thing nobody checks.
-
----
+`ZZZ Operations` occurs in exactly two places in the workbook -- the `Staging Sheet` and
+the `DIU ` output, both of which are the answers. It is an admin bucket that exists in
+their process and not in the reference data they gave us, so nothing here can derive it.
+That is worth showing the client rather than working around: a value that reaches the
+journal but is in no master list is the kind of thing nobody checks.
 
 ## Working on this
 

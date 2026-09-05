@@ -6,8 +6,8 @@ blank are the opportunity; the rows they filled are the check on whether we agre
 
 | Column | Human | Now |
 |---|---|---|
-| `pulled_out_sender_beneficiary` | 55 filled | 45 / 55 agree |
-| `matched_sender_beneficiary` | 48 filled | 31 / 48 agree, 8 / 52 net new |
+| `pulled_out_sender_beneficiary` | 55 filled | 53 / 55 agree |
+| `matched_sender_beneficiary` | 48 filled | 45 / 48 agree, 0 wrong, 8 / 52 net new |
 
 Two stages, kept apart on purpose: extraction and matching fail differently, and a
 reviewer looking at a wrong answer needs to see which half went wrong.
@@ -140,37 +140,68 @@ source stays put. `ReferenceLists.canonical_spelling` does the one and leaves th
 
 ---
 
+## Abbreviation is a match, in both directions
+
+The group writes its own entities both ways and the sheets disagree about which:
+
+```
+statement  NI ABF II SCSP                    sheet  Nordvik Infrastructure Advanced ... II SCSp
+statement  NORDVIK INFRASTRUCTURE V CN SCSP  sheet  NI V CN SCSp
+```
+
+Same relationship, opposite direction, so both are tried. An initialism consumed exactly
+scores just under an exact spelling match: a list holding the name outright still beats a
+list holding its abbreviation, and between lists the Process sheet's priority decides --
+which is how the related party master wins over the entity list.
+
+**The strictness is load-bearing.** `expand` deliberately lets a one-letter token open a
+longer word, and resolves the ambiguity by ranking whole-word matches across all the
+candidates it is handed. Asked about one name at a time it has no such ranking, and
+`NI ABF I SCSP` silently answers for `NI ABF II SCSP` -- which it did, on six rows, until
+`is_initialism_of` required a token to stand for two or more words or be a word outright.
+`expand` itself is untouched: `matched_legal_entity` depends on its current behaviour for
+100/100.
+
+One more form of the same thing. `NIP P/S` is an initialism plus the kind of company it
+is, and the bank prints the name without the form, so the form is set aside on both sides
+-- but only for a **single-token** initialism. The unrestricted version was measured first
+and cost two matches, five classifications and five transtypes by bridging multi-word
+names that merely shared some initials.
+
+---
+
 ## What was tried and rejected
 
-**Expanding the bank's abbreviation against the legal entity list.** `NI ABF II SCSP`
-expands cleanly to `Nordvik Infrastructure Advanced Bioenergy Fund II SCSp`, and the
-machinery already exists in `abbreviations.py` for exactly this. It scores **worse**:
-28/48 with it, 29/48 without.
+**Expanding the bank's abbreviation against the legal entity list, ahead of matching.**
+`NI ABF II SCSP` expands cleanly, and the machinery already existed for exactly this. As a
+*first* rule it scores **worse**: 28/48 with it, 29/48 without. The human records the short
+master spelling where the short form is on a list, so expanding it overshoots. It belongs
+where it now sits -- a tier inside `match`, under the exact-spelling tiers, decided by list
+priority rather than applied first.
 
-The reason is that the human records the *short* master spelling — `NI ABF I SCSp`, which
-is on the related party master — so expanding it to the full fund name is the wrong
-direction. Where the short form is not on any list, the long one is right; where it is,
-expanding overshoots. That is a per-row question, and the priority order already answers
-it, so the expansion earns nothing.
+**Setting the legal form aside for any initialism.** 45/48 on this column, and it cost
+five classifications and five transtypes elsewhere by bridging unrelated names. Restricted
+to a single-token initialism it costs nothing and keeps the five.
 
-**Applying the other-party rule everywhere.** 25/48 → 16/48. Recorded above.
+**Applying the other-party rule everywhere.** 25/48 -> 16/48. It fires only when the name
+we read is on none of the lists.
 
 ---
 
 ## What it still gets wrong
 
-14 of the 48 disagree with the human. **Eleven of them go to a reviewer** rather than
-booking through.
+Three of 48, and **its disagreement count is zero** -- every row it does not reproduce is
+one it declines rather than one it books incorrectly.
 
-| Rows | We say | Human says | Why |
-|---:|---|---|---|
-| 6 | `NI ABF II Co-Invest SCSp` | `Nordvik Infrastructure Advanced Bioenergy Fund II SCSp` | `NI ABF II SCSP` is not on any list; the co-invest vehicle is the nearest thing that is |
-| 5 | `Nordvik Infrastructure Partners Inc.` | `NIP P/S` | two entities of the same group; nothing in the text separates them |
-| 3 | same company, other spelling | | the lists disagree and neither is wrong |
+| Rows | Wanted | Why |
+|---:|---|---|
+| 19, 62 | `NIP P/S` from `NIP LIT` | `NIP LIT` appears nowhere in the workbook |
+| 67 | `NIP PLATFORM SOLUTIONS APS` from `NIP CINNABAR APS` | likewise |
 
-The first two families need knowledge that is not in the bank text or the lists — which is
-what the review queue is for. The third is a data-quality fact about the client's own
-workbook and is worth showing them.
+Both are in-house aliases: a name the fund's own staff know maps to an entity, recorded in
+no master list, no bank account report and no project code. This is what a client-maintained
+alias list is for. It is not something the statement or the reference data can supply, and
+guessing from a shared `NIP` prefix would answer `NIP P/S` for `NIP CINNABAR APS` too.
 
 ---
 
