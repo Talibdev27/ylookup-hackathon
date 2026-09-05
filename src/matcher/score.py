@@ -9,9 +9,13 @@ The second is the pitch. The human left 52 of 100 counterparties unmatched.
 
 Alignment note: the parsed rows come out in statement-filename order and the staging
 sheet is in its own order -- only 11 of 100 line up by position. Comparing by index
-silently scores the wrong pairs, so rows are joined on (narrative, amount, bank
-reference). That key is unique for 98 of 100 rows and covers all 100 as a multiset;
-the two genuine duplicates are consumed greedily.
+silently scores the wrong pairs, so rows are joined on a key.
+
+That key includes the account number, which is not optional: an inter-fund transfer is
+written on both statements with the same narrative, the same amount and the same bank
+reference, so a key without the account pairs the two sides crosswise. It showed up as
+three legal entities in a rotating three-cycle, which reads like a matcher bug and is
+not one.
 
 Usage:  python -m src.matcher.score data/rows.json
 """
@@ -25,7 +29,7 @@ from pathlib import Path
 from src.contract import STAGING_COLUMN
 from src.spine.build import WORKBOOK, load_workbook
 
-Key = tuple[str, str, str]
+Key = tuple[str, str, str, str]
 
 
 def _norm(value: str | None) -> str:
@@ -40,14 +44,24 @@ def _truth_key(record: dict[str, str]) -> Key:
             break
     else:
         amount = ""
-    return _norm(record["Narrative"]), amount, _norm(record["Bank reference"])
+    return (
+        _norm(record["Narrative"]),
+        amount,
+        _norm(record["Bank reference"]),
+        _norm(record["Account Number"]),
+    )
 
 
 def _row_key(row: dict) -> Key:
     raw = row["raw"]
     value = raw["credit"] if raw["credit"] is not None else raw["debit"]
     amount = f"{value:.2f}" if value is not None else ""
-    return _norm(raw["narrative_raw"]), amount, _norm(raw["bank_reference"])
+    return (
+        _norm(raw["narrative_raw"]),
+        amount,
+        _norm(raw["bank_reference"]),
+        _norm(raw["account_number"]),
+    )
 
 
 def align(rows: list[dict], truth: list[dict[str, str]]) -> list[tuple[dict, dict[str, str]]]:

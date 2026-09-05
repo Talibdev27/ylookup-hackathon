@@ -69,3 +69,17 @@ def test_rows_align_to_ground_truth() -> None:
     rows = json.loads(open("data/rows.json").read())
     truth = load_workbook()["Staging Sheet"]
     assert len(align(rows, truth)) == 100
+
+
+def test_alignment_key_is_unique() -> None:
+    """An inter-fund transfer is written on both statements with the same narrative,
+    amount and bank reference. Without the account number in the key, the two sides pair
+    crosswise and three rows score against the wrong fund."""
+    import json
+
+    from src.matcher.score import _row_key, _truth_key
+
+    rows = json.loads(open("data/rows.json").read())
+    truth = load_workbook()["Staging Sheet"]
+    assert len({_row_key(r) for r in rows}) == 100
+    assert len({_truth_key(t) for t in truth}) == 100

@@ -9,14 +9,44 @@ before touching the hard ones, so there is always a working pipeline to demo.
 from __future__ import annotations
 
 from src.contract import Alternative, Evidence, Field, Row
+from src.matcher.abbreviations import expand
 
 # --------------------------------------------------------------------------- free
 
 
 def matched_legal_entity(row: Row, legal_entities: list[str]) -> Field:
-    """Account Name -> full legal entity. 100/100 achievable: it is a lookup against a
-    99-row master list, with the bank's abbreviated form on one side."""
-    raise NotImplementedError("W2: exact + abbreviation match on Legal Entity Master List")
+    """Account Name -> the full legal entity, from the 97-row master list.
+
+    The bank abbreviates (`NI ABF II SCSP`); the master list spells it out. See
+    matcher/abbreviations.py for the expansion. Alternatives are kept even when the
+    top candidate is clear, because `NI V SCSP` also opens `... VI SCSp` and the
+    reviewer should be able to see what was rejected.
+    """
+    candidates = expand(row.raw.account_name, legal_entities)
+    if not candidates:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="unresolved",
+            evidence=Evidence(
+                text=f"no entry in the fund list matches {row.raw.account_name!r}",
+                source_list="Legal Entity Master List",
+            ),
+        )
+    best = candidates[0]
+    return Field(
+        value=best.value,
+        confidence=best.confidence,
+        status="auto" if best.confidence >= 0.7 else "needs_review",
+        evidence=Evidence(
+            text=f"the account is named {row.raw.account_name!r} on the statement",
+            source_list="Legal Entity Master List",
+        ),
+        alternatives=[
+            Alternative(value=other.value, confidence=other.confidence)
+            for other in candidates[1:4]
+        ],
+    )
 
 
 def cash_leg_transtype(row: Row) -> Field:
