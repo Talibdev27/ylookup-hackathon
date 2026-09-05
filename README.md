@@ -14,6 +14,24 @@ So this does the work **and shows its evidence**. The agent proposes a counterpa
 project code and a classification for every row; the reviewer sees the proposal, its
 confidence, and the exact span of bank narrative it came from, and approves or corrects it.
 
+## Using it on your own data
+
+The app opens on the sample dataset. To work on real statements, go to **Load new
+statements** and upload:
+
+1. **This week's bank statements** — one PDF per account, as many as you like.
+2. **Your reference lists** — the Excel workbook holding your funds, related parties,
+   investors, suppliers and deals. Uploaded once; only re-uploaded when they change.
+
+Both halves resolve independently, so the weekly job is just dropping in the PDFs.
+
+The matcher is worthless without the reference lists — without them it can read the
+statements but cannot tell you who anyone is — so the upload screen says so rather than
+quietly producing a hundred rows of "no answer found".
+
+Scoring is skipped for uploaded data: `Staging Sheet` holds *the human's answers*, and
+real client data has no answer key.
+
 ## Run it
 
 ```bash

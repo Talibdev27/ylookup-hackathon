@@ -82,6 +82,7 @@
 <header>
   <div class="bar">
     <h1>Transactions to check</h1>
+    <a href="/upload" style="font-size:14px; font-weight:600">Load new statements</a>
     <span class="sub">
       {{ remaining }} left to check ·
       {{ reviewed }} done ·
@@ -94,6 +95,12 @@
 </header>
 
 <main>
+  {% if space and space.is_bundled %}
+    <p class="lede" style="background:#fdf5e6; border-left:3px solid #8a5a12; padding:12px 15px;
+       border-radius:0 8px 8px 0; color:#5c4212;">
+      Showing the sample dataset. <a href="/upload">Load your own statements</a> to work on real ones.
+    </p>
+  {% endif %}
   <p class="lede">
     These are the payments where the answer was not clear-cut. Everything else has been
     filled in already. For each one below, either accept what we suggest or pick the

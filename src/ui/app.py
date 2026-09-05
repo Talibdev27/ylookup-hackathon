@@ -12,13 +12,21 @@ Run:  python3 serve.py
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
+from src.spine import workspace
 from src.ui import labels
 
+# A bank statement is tens of kilobytes; a reference workbook a few megabytes. Anything
+# far outside that is not what the person thinks they are uploading.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 app.jinja_env.globals.update(
     label=labels.label,
     question=labels.question,
@@ -80,6 +88,7 @@ def index():
         reviewed=done,
         remaining=needs_review - done,
         confident=len(rows) - needs_review,
+        space=workspace.current(),
     )
 
 
@@ -101,6 +110,77 @@ def decide(row_id: int):
     if request.is_json:
         return jsonify({"row_id": row_id, "choice": choice, "reviewed": len(decisions)})
     return redirect(url_for("index"))
+
+
+@app.get("/upload")
+def upload_form():
+    space = workspace.current()
+    return render_template(
+        "upload.html",
+        space=space,
+        statement_count=len(space.statement_files),
+        error=request.args.get("error"),
+    )
+
+
+@app.post("/upload")
+def upload():
+    """Take this week's statements, and a reference workbook if one is not set up yet.
+
+    The pipeline runs synchronously: seven statements parse in a couple of seconds, and a
+    progress bar for a two-second job is a worse experience than waiting for it.
+    """
+    statements = [f for f in request.files.getlist("statements") if f.filename]
+    workbook = request.files.get("workbook")
+    has_workbook = bool(workbook and workbook.filename)
+
+    if not statements:
+        return redirect(url_for("upload_form", error="Choose at least one bank statement to upload."))
+    bad = [f.filename for f in statements if not f.filename.lower().endswith(".pdf")]
+    if bad:
+        return redirect(url_for("upload_form",
+                                error=f"Bank statements have to be PDFs. This one is not: {bad[0]}"))
+    if has_workbook and not workbook.filename.lower().endswith((".xlsx", ".xlsm")):
+        return redirect(url_for("upload_form",
+                                error="The reference lists have to be an Excel file (.xlsx)."))
+    if not has_workbook and workspace.current().workbook is None:
+        return redirect(url_for("upload_form",
+                                error="No reference lists are set up yet, so one has to be uploaded too."))
+
+    if has_workbook:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as staged:
+            workbook.save(staged.name)
+        workspace.save_workbook(Path(staged.name))
+        Path(staged.name).unlink(missing_ok=True)
+
+    target = workspace.clear_statements()
+    for statement in statements:
+        statement.save(target / secure_filename(statement.filename))
+
+    try:
+        rebuild()
+    except (SystemExit, AssertionError, ValueError) as failure:
+        return redirect(url_for("upload_form", error=str(failure)))
+    return redirect(url_for("index"))
+
+
+def rebuild() -> None:
+    """Re-run the pipeline over whatever is now in the workspace."""
+    from src.matcher.run import apply_stages, load_masters
+    from src.spine.build import load_workbook, parse_statements, write_sqlite
+    from src.matcher.normalise import normalise
+
+    space = workspace.current()
+    sheets = load_workbook(space.workbook)
+    write_sqlite(sheets)
+    rows = parse_statements(space.statements)
+    for row in rows:
+        row.raw.narrative_normalised, _ = normalise(row.raw.narrative_raw)
+    payload = [r.to_dict() for r in rows]
+    payload, _ = apply_stages(payload, load_masters())
+    ROWS.parent.mkdir(parents=True, exist_ok=True)
+    ROWS.write_text(json.dumps(payload, indent=2))
+    DECISIONS.unlink(missing_ok=True)
 
 
 @app.post("/reset")

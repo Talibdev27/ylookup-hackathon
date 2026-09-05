@@ -27,7 +27,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from src.contract import STAGING_COLUMN
-from src.spine.build import WORKBOOK, load_workbook
+from src.spine import workspace
+from src.spine.build import load_workbook
 
 Key = tuple[str, str, str, str]
 
@@ -105,7 +106,16 @@ def main() -> int:
         print(f"no {path} yet -- run `python -m src.spine.build` first", file=sys.stderr)
         return 1
     rows = json.loads(path.read_text())
-    truth = load_workbook(WORKBOOK)["Staging Sheet"]
+    sheets = load_workbook()
+    truth = sheets.get("Staging Sheet")
+    if not truth:
+        # Real client data has no answer key -- only the sample workbook carries one.
+        # That is not an error, it just means there is nothing to score against.
+        print(
+            f"{len(rows)} transactions processed. This workbook has no `Staging Sheet`, "
+            "so there are no human answers to score against."
+        )
+        return 0
     pairs = align(rows, truth)
     if len(pairs) != len(rows):
         print(f"warning: {len(rows) - len(pairs)} rows did not align to ground truth", file=sys.stderr)

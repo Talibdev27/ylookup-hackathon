@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load statements</title>
+<style>
+  :root { --bg:#fbfbfa; --card:#fff; --fg:#1a1a19; --muted:#6f6f6a; --line:#e6e4e0;
+          --accent:#0f5f52; --accent-soft:#e8f2ef; --warn:#8a5a12; --warn-soft:#fdf5e6;
+          --bad:#7a3030; --bad-soft:#fbeeee; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:18px 32px; }
+  header div { max-width:720px; margin:0 auto; display:flex; justify-content:space-between;
+               align-items:baseline; gap:16px; }
+  h1 { font-size:19px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  main { max-width:720px; margin:0 auto; padding:28px 32px 80px; }
+  .lede { color:var(--muted); margin:0 0 26px; }
+  .step { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:22px 24px; margin-bottom:18px; }
+  .step h2 { font-size:16px; margin:0 0 4px; font-weight:650; }
+  .step p { margin:0 0 16px; color:var(--muted); font-size:14.5px; }
+  .status { display:inline-block; font-size:12.5px; font-weight:600; padding:3px 10px;
+            border-radius:20px; margin-left:8px; vertical-align:middle; }
+  .status.ok { background:var(--accent-soft); color:var(--accent); }
+  .status.todo { background:var(--warn-soft); color:var(--warn); }
+  input[type=file] { font:inherit; font-size:14.5px; width:100%; padding:14px;
+                     border:1.5px dashed var(--line); border-radius:9px; background:#fcfcfb; }
+  input[type=file]::file-selector-button { font:inherit; font-size:14px; font-weight:600;
+      margin-right:14px; padding:8px 15px; border-radius:7px; border:1px solid var(--line);
+      background:var(--card); color:var(--fg); cursor:pointer; }
+  button { font:inherit; font-size:15px; font-weight:650; padding:12px 26px; border-radius:9px;
+           border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  .error { background:var(--bad-soft); border-left:3px solid var(--bad); color:#5f2222;
+           padding:13px 16px; border-radius:0 8px 8px 0; margin:0 0 22px; font-size:14.5px; }
+  .note { font-size:13.5px; color:var(--muted); margin-top:22px; }
+  a { color:var(--accent); }
+</style>
+
+<header>
+  <div>
+    <h1>Load bank statements</h1>
+    <a href="/">Back to the review queue</a>
+  </div>
+</header>
+
+<main>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <p class="lede">
+    Drop in this week's bank statements and we will work through them: who each payment
+    was to or from, which project it belongs to, and how it should be booked. Anything we
+    are not sure about comes back to you as a short list to check.
+  </p>
+
+  <form method="post" action="/upload" enctype="multipart/form-data">
+    <section class="step">
+      <h2>1 · This week's bank statements</h2>
+      <p>One PDF per account. Select as many as you like.</p>
+      <input type="file" name="statements" accept="application/pdf,.pdf" multiple required>
+    </section>
+
+    <section class="step">
+      <h2>
+        2 · Your reference lists
+        {% if space.workbook %}
+          <span class="status ok">Already set up</span>
+        {% else %}
+          <span class="status todo">Needed</span>
+        {% endif %}
+      </h2>
+      {% if space.workbook %}
+        <p>
+          Already loaded, so you can leave this empty. Only upload again if your funds,
+          investors, suppliers or deals have changed.
+        </p>
+      {% else %}
+        <p>
+          The Excel workbook holding your funds, related parties, investors, suppliers and
+          deals. Without it we can read the statements but cannot tell you who anyone is.
+        </p>
+      {% endif %}
+      <input type="file" name="workbook" accept=".xlsx,.xlsm">
+    </section>
+
+    <button type="submit">Read the statements</button>
+    <p class="note">
+      Nothing leaves this machine. Files are kept in the app's own folder and replaced the
+      next time you upload.
+      {% if statement_count %}
+        Currently loaded: {{ statement_count }} statement{{ '' if statement_count == 1 else 's' }}.
+      {% endif %}
+    </p>
+  </form>
+</main>

@@ -83,3 +83,15 @@ def test_alignment_key_is_unique() -> None:
     truth = load_workbook()["Staging Sheet"]
     assert len({_row_key(r) for r in rows}) == 100
     assert len({_truth_key(t) for t in truth}) == 100
+
+
+def test_workspace_prefers_uploads_but_falls_back() -> None:
+    """Uploading this week's statements against reference lists that are already set up is
+    the normal case, so the two halves of a workspace resolve independently. Gating the
+    statement-count check on the *workbook* being bundled rejected every such upload."""
+    from src.spine import workspace
+
+    space = workspace.current()
+    assert space.ready
+    assert space.is_bundled
+    assert space.uses_bundled_statements
