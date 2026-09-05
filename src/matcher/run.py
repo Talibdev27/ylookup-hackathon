@@ -24,21 +24,25 @@ def load_masters() -> dict[str, list]:
     sheets = load_workbook()
     return {
         "legal_entities": [list(r.values())[0] for r in sheets["Legal Entity Master List"]],
-        "related_parties": sheets["Related Party Master"],
-        "investors": sheets["Investor Master List"],
-        "vendors": sheets["Vendor Master List"],
+        "related_parties": [r["Related Party"] for r in sheets["Related Party Master"]],
+        "investors": sorted({r["Investor"] for r in sheets["Investor Master List"]}),
+        "vendors": sorted({r["Vendor"] for r in sheets["Vendor Master List"]}),
         "project_codes": sheets["Project Code Report"],
         "deals": sheets["Deal & Position Master List"],
+        "deal_names": sorted({d["Deal Name"] for d in sheets["Deal & Position Master List"] if d["Deal Name"]}),
     }
 
 # field key -> (callable, names of the master lists it needs)
-NEEDS = {"matched_legal_entity": ("legal_entities",)}
+NEEDS = {
+    "matched_legal_entity": ("legal_entities",),
+    "matched_sender_beneficiary": ("__all__",),
+}
 
 STAGES = {
     "cash_leg_transtype": stages.cash_leg_transtype,
     "matched_legal_entity": stages.matched_legal_entity,
     "pulled_out_sender_beneficiary": stages.pulled_out_sender_beneficiary,
-    "matched_sender_beneficiary": stages.matched_sender_beneficiary,
+    "matched_sender_beneficiary": stages.matched_sender_beneficiary,  # reads the stage above
     "matched_project_code": stages.matched_project_code,
     "classification": stages.classification,
     "resolved_position": stages.resolved_position,
@@ -51,8 +55,10 @@ def apply_stages(payload: list[dict], masters: dict[str, list] | None = None) ->
     for entry in payload:
         row = Row(row_id=entry["row_id"], source=entry["source"], raw=Raw(**entry["raw"]))
         for key, stage in STAGES.items():
-            args = [masters[name] for name in NEEDS.get(key, ()) if name in masters]
-            if len(args) != len(NEEDS.get(key, ())):
+            needed = NEEDS.get(key, ())
+            args = [masters if name == "__all__" else masters[name]
+                    for name in needed if name == "__all__" or name in masters]
+            if len(args) != len(needed):
                 if key not in skipped:
                     skipped.append(key)
                 continue
@@ -67,6 +73,7 @@ def apply_stages(payload: list[dict], masters: dict[str, list] | None = None) ->
                 if key not in skipped:
                     skipped.append(key)
                 continue
+            row.fields[key] = field
             entry.setdefault("fields", {})[key] = asdict(field)
     return payload, skipped
 
