@@ -335,6 +335,13 @@ def _abbreviation_equivalents(name: str, entries: list[str]) -> list[str]:
             continue  # already an exact match; this tier is for the ones that are not
         if is_initialism_of(name, entry) or is_initialism_of(entry, name):
             equivalent.append(entry)
+            continue
+        # `NIP P/S` is one initialism plus the form of company it is, and the bank prints
+        # the name without the form. Only a single-token initialism qualifies, so this
+        # cannot start bridging multi-word names that merely share some initials.
+        bare = [w for w in entry.split() if not _looks_like_legal_form(w)]
+        if len(bare) == 1 and len(bare[0]) >= 3 and is_initialism_of(bare[0], name):
+            equivalent.append(entry)
     return equivalent
 
 

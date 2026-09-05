@@ -419,10 +419,17 @@ NARRATIVE_RULES: list[tuple[tuple[str, ...], str, str]] = [
         "Investment",
         "the bank text describes money going into an investment",
     ),
+]
+
+# Tested after the counterparty has had its say, not before. A waived charge is a fact
+# about the bank's fee, not about the payment: the bank waives it on the fund's own
+# transfers, and also on payments to a related party, so on its own it separates nothing.
+# Above the related party check it turned five payments to `NIP P/S` into `Internal`.
+FEE_WAIVER_RULES: list[tuple[tuple[str, ...], str, str]] = [
     (
         ("CHARGE WAIVED",),
         "Internal",
-        "the bank waived its charge, which it does on the fund's own transfers",
+        "the bank waived its charge, which it does on transfers between the fund's own accounts",
     ),
 ]
 
@@ -506,10 +513,30 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
             ),
         )
 
+    own = _own_legal_entity(row)
+    if matched and matched.value and own and counterparty.fold_legal_form(
+        matched.value
+    ) == counterparty.fold_legal_form(own):
+        # The counterparty is this statement's own fund. Money that leaves an account and
+        # arrives at the same legal entity has not left the fund, whichever list the name
+        # was found on.
+        return Field(
+            value="Internal",
+            confidence=0.9,
+            status="auto",
+            evidence=Evidence(
+                span=matched.evidence.span,
+                text=f"this is {own!r} moving money between its own accounts",
+                source_list=source,
+            ),
+        )
+
     if source == "Related Party Master":
         # A related party with nothing in the text saying what the payment was for. The
         # counterparty is the only evidence there is, so it is the proposal -- but a
         # proposal made on that little goes to a reviewer rather than straight through.
+        # Knowing who was paid outranks the fee-waiver flag, which is why that rule is
+        # tested below this and not with the others.
         return Field(
             value="Related Party",
             confidence=0.5,
@@ -526,6 +553,19 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
                 Alternative(value="Internal", confidence=0.2),
                 Alternative(value="Investment Transfer", confidence=0.2),
             ],
+        )
+
+    waived = _first_phrase(narrative, FEE_WAIVER_RULES)
+    if waived:
+        phrase, value, reason = waived
+        start = narrative.upper().index(phrase)
+        return Field(
+            value=value,
+            confidence=0.8,
+            status="auto",
+            evidence=Evidence(
+                span=(start, start + len(phrase)), text=reason, source_list="Narrative"
+            ),
         )
 
     return Field(

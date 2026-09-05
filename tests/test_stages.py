@@ -175,6 +175,31 @@ def test_classification_reads_what_the_bank_says_the_payment_was_for() -> None:
     assert row.raw.narrative_raw[start:end] == "CHARGES FOR"
 
 
+def test_a_waived_charge_does_not_outrank_knowing_who_was_paid() -> None:
+    """The bank waives its fee on the fund's own transfers and on payments to a related
+    party alike, so on its own the flag separates nothing. Tested above the counterparty
+    it turned five payments to a related party into `Internal`."""
+    row = a_row(narrative_raw="52443473437109, NIP PLATFORM SOLUTIONS APS, TFR+ CHARGE WAIVED")
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    assert stages.classification(row, LISTS).value == "Related Party"
+
+
+def test_a_transfer_to_our_own_fund_is_internal() -> None:
+    """Money that leaves an account and arrives at the same legal entity has not left the
+    fund, whichever reference list the name was found on."""
+    row = a_row(narrative_raw="52443473437109, NORDVIK INFRASTRUCTURE V SCSP")
+    lists = ReferenceLists(
+        legal_entities=["Nordvik Infrastructure V SCSp"],
+        related_parties=["Nordvik Infrastructure V SCSp"],
+    )
+    for name in ("matched_legal_entity", "pulled_out_sender_beneficiary",
+                 "matched_sender_beneficiary"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    result = stages.classification(row, lists)
+    assert result.value == "Internal" and result.status == "auto"
+
+
 def test_a_fee_line_that_also_waives_a_charge_is_still_a_fee() -> None:
     """Rule order is the rule. `CHARGE WAIVED` marks the fund's own transfers, but it
     also appears on fee lines, so the fee test has to run first."""
