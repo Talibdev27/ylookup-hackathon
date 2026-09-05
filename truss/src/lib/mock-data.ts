@@ -10,6 +10,17 @@ import type {
 // Seed data for the TRUSS demo. Mirrors the examples in docs/TRUSS.md (§8, §12, §14,
 // §16.1, §22, §29) rather than inventing a different story.
 
+// The four real funds the Python matcher app has actual journal data for -- ids match
+// that backend's own slugify(legal entity name) exactly, since it is the source of
+// truth for these. See src/lib/backend.ts and docs/backend-integration.md. If the
+// Python side's _slug() ever changes, these four ids have to change with it.
+const NORDVIK_FUND_IDS = [
+  "nordvik-infrastructure-advanced-bioenergy-fund-i-scsp",
+  "nordvik-infrastructure-advanced-bioenergy-fund-ii-scsp",
+  "nordvik-infrastructure-growth-markets-fund-ii-scsp",
+  "nordvik-infrastructure-v-scsp",
+];
+
 export const investors: Investor[] = [
   {
     id: "inv-a",
@@ -17,6 +28,13 @@ export const investors: Investor[] = [
     organisationId: "ORG-4471",
     contactEmail: "contact@investor-a.example",
     companyIds: ["co-a", "co-b", "co-c"],
+  },
+  {
+    id: "inv-nordvik",
+    name: "Nordvik LP",
+    organisationId: "ORG-NORDVIK",
+    contactEmail: "contact@nordvik-lp.example",
+    companyIds: NORDVIK_FUND_IDS,
   },
   {
     id: "inv-b",
@@ -39,7 +57,7 @@ export const fundManagers: FundManager[] = [
     id: "fm-1",
     name: "Fund Manager",
     contactEmail: "manager@truss.example",
-    investorIds: ["inv-a", "inv-b", "inv-c"],
+    investorIds: ["inv-a", "inv-b", "inv-c", "inv-nordvik"],
   },
 ];
 
@@ -50,6 +68,24 @@ export const companies: Company[] = [
   { id: "co-d", name: "Company D", sector: "Industrials", investmentValueGbp: 420000, status: "active", lastUpdated: "2026-08-15" },
   { id: "co-e", name: "Company E", sector: "Technology", investmentValueGbp: 260000, status: "inactive", lastUpdated: "2026-05-02" },
   { id: "co-f", name: "Company F", sector: "Energy", investmentValueGbp: 690000, status: "active", lastUpdated: "2026-09-01" },
+
+  // Real funds, real journal data behind them via src/lib/backend.ts. investmentValueGbp
+  // is 0 rather than invented -- the matcher data is transaction activity, not a
+  // committed-capital figure, and making one up would be exactly the kind of confident
+  // wrong number this whole product argues against.
+  ...NORDVIK_FUND_IDS.map((id, index) => ({
+    id,
+    name: [
+      "Nordvik Infrastructure Advanced Bioenergy Fund I SCSp",
+      "Nordvik Infrastructure Advanced Bioenergy Fund II SCSp",
+      "Nordvik Infrastructure Growth Markets Fund II SCSp",
+      "Nordvik Infrastructure V SCSp",
+    ][index],
+    sector: "Infrastructure",
+    investmentValueGbp: 0,
+    status: "active" as const,
+    lastUpdated: "2026-03-31",
+  })),
 ];
 
 export const documents: Document[] = [

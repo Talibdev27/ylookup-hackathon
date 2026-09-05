@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileSpreadsheet, Scale, Wallet, TrendingUp, FolderOpen, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Scale, Wallet, TrendingUp, FolderOpen, Sparkles, ListChecks } from "lucide-react";
 
 export function DocumentTabs({ companyId }: { companyId: string }) {
   const pathname = usePathname();
@@ -13,6 +13,10 @@ export function DocumentTabs({ companyId }: { companyId: string }) {
     { label: "Balance Sheet", href: `${base}/balance-sheet`, icon: Scale },
     { label: "Cash Flow", href: `${base}/cash-flow`, icon: Wallet },
     { label: "Income Statement", href: `${base}/income-statement`, icon: TrendingUp },
+    // Live matcher output -- proposals to accept/correct and automated-check findings --
+    // for the four real funds. A different thing from "AI Review" below, which is the
+    // mock document-upload flow's invented analysis, not backed by this data.
+    { label: "Review Queue", href: `${base}/review`, icon: ListChecks },
     { label: "Documents", href: `${base}/documents`, icon: FolderOpen },
     { label: "AI Review", href: `${base}/ai-review`, icon: Sparkles },
   ];
