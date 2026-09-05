@@ -33,6 +33,14 @@
   .error { background:var(--bad-soft); border-left:3px solid var(--bad); color:#5f2222;
            padding:13px 16px; border-radius:0 8px 8px 0; margin:0 0 22px; font-size:14.5px; }
   .note { font-size:13.5px; color:var(--muted); margin-top:22px; }
+  button[disabled] { opacity:.75; cursor:progress; }
+  .working { display:none; align-items:center; gap:10px; margin-top:16px;
+             color:var(--accent); font-size:14.5px; font-weight:600; }
+  .working.on { display:flex; }
+  .spinner { width:16px; height:16px; border:2px solid var(--line);
+             border-top-color:var(--accent); border-radius:50%;
+             animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   a { color:var(--accent); }
 </style>
 
@@ -83,6 +91,10 @@
     </section>
 
     <button type="submit">Read the statements</button>
+    <div class="working">
+      <span class="spinner"></span>
+      <span class="working-text">Reading them now — this takes a few seconds.</span>
+    </div>
     <p class="note">
       Nothing leaves this machine. Files are kept in the app's own folder and replaced the
       next time you upload.
@@ -92,3 +104,21 @@
     </p>
   </form>
 </main>
+
+<script>
+  // Pressing the button used to look identical to nothing happening. On a sleeping free
+  // instance the first request wakes the server, which can take the better part of a
+  // minute, and a silent button is indistinguishable from a broken one.
+  const form = document.querySelector('form');
+  const working = document.querySelector('.working');
+  const text = document.querySelector('.working-text');
+
+  form.addEventListener('submit', () => {
+    form.querySelector('button[type="submit"]').disabled = true;
+    working.classList.add('on');
+    // If it is still going after ten seconds, say why rather than leaving them guessing.
+    setTimeout(() => {
+      text.textContent = 'Still reading — the server may have been asleep. Give it a moment.';
+    }, 10000);
+  });
+</script>
