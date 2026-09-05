@@ -247,6 +247,23 @@ OVERHEAD_PHRASES = [
 
 NO_PROJECT = "Flag for review - no project match"
 
+# Money the fund moves to fund its own running costs rather than a project. All nine rows
+# in the sample that book to `OVERHEAD` say one of these, and no row saying one of these
+# books anywhere else. Direction does not matter: the same transfer is an outgoing on one
+# statement and an incoming on the other, and both legs are overhead.
+OVERHEAD_MOVEMENTS: list[tuple[tuple[str, ...], str, str]] = [
+    (
+        ("COVER INVOICES",),
+        "OVERHEAD",
+        "the money was moved to pay the fund's own invoices, not a project's",
+    ),
+    (
+        ("INTERNAL TRANSFER", "INTERNAL FX TRANSFER"),
+        "OVERHEAD",
+        "an internal transfer, which the working file books to overhead rather than to a project",
+    ),
+]
+
 
 def _named_project(narrative: str) -> str | None:
     """The project as the bank wrote it, from `PROJECT <name>`."""
@@ -272,7 +289,9 @@ def _lookup(word: str | None, codes: list[str]) -> str | None:
     return min(hits, key=len) if hits else None
 
 
-def _project_named_anywhere(narrative: str, codes: list[str]) -> str | None:
+def _project_named_anywhere(
+    narrative: str, codes: list[str], lists: ReferenceLists | None = None
+) -> str | None:
     """A project code written somewhere in the narrative other than as `PROJECT <name>`.
 
     Six rows name the project only in passing -- `... FOR ACQ 100PER OF SHARES IN
@@ -287,6 +306,17 @@ def _project_named_anywhere(narrative: str, codes: list[str]) -> str | None:
     """
     found = counterparty.extract(narrative)
     payee = counterparty.fold(found[0]) if found else ""
+
+    # A project mentioned in passing belongs to whoever the money moved with. On a row
+    # where that is a company none of the lists knows, there is nobody to attach the
+    # project to, and the mention is as likely to be the deal it settles as the project it
+    # books to -- so the row is flagged rather than assigned one.
+    if found and lists is not None:
+        words = found[0].split()
+        unknown = not counterparty.match(found[0], lists.counterparty_lists())
+        if unknown and any(counterparty._looks_like_legal_form(word) for word in words):
+            return None
+
     haystack = f" {counterparty.fold(narrative)} "
     for code in sorted(codes, key=lambda c: -len(counterparty.fold(c))):
         folded = counterparty.fold(code)
@@ -347,7 +377,7 @@ def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
             ),
         )
 
-    code = _project_named_anywhere(narrative, codes)
+    code = _project_named_anywhere(narrative, codes, lists)
     if code:
         return Field(
             value=code,
@@ -362,13 +392,17 @@ def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
             ),
         )
 
-    if "INTERNAL TRANSFER" in upper and not (row.raw.credit or 0) > 0:
+    overhead = _first_phrase(narrative, OVERHEAD_MOVEMENTS)
+    if overhead:
+        phrase, value, reason = overhead
+        start = upper.index(phrase)
         return Field(
-            value="OVERHEAD",
-            confidence=0.6,
-            status="needs_review",
+            value=value,
+            confidence=0.85,
+            status="auto",
             evidence=Evidence(
-                text="an internal transfer out, which the working file books to overhead",
+                span=(start, start + len(phrase)),
+                text=reason,
                 source_list="Project Code Report",
             ),
         )

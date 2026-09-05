@@ -296,6 +296,31 @@ def test_a_project_named_across_a_line_break_is_still_named() -> None:
     assert stages.matched_project_code(row, lists).value == "Ranfjord II", "not the shorter Ranfjord"
 
 
+def test_money_moved_to_cover_the_funds_own_costs_is_overhead() -> None:
+    """Both legs of the same internal transfer book to overhead, so direction does not
+    enter into it -- one statement shows it going out and the other shows it coming in."""
+    out = a_row(narrative_raw="NI ABF I SCSP, 47223IZ05W0Z, INTERNAL TRANSFER")
+    into = a_row(narrative_raw="NORDVIK INFRASTRUCTURE ADVANCED, TFR+ INTERNAL TRANSFER",
+                 credit=6550000.0, debit=None)
+    for row in (out, into):
+        assert stages.matched_project_code(row, PROJECTS).value == "OVERHEAD"
+    covering = a_row(narrative_raw="LU HBEU 240-149813-131, INTERNAL FX TRANSFER TO COVER INVOICES")
+    assert stages.matched_project_code(covering, PROJECTS).value == "OVERHEAD"
+
+
+def test_a_project_in_passing_needs_somebody_to_attach_it_to() -> None:
+    """A project mentioned in passing belongs to whoever the money moved with. Where that
+    is a company none of the lists knows, the mention is as likely to name the deal being
+    settled as the project being booked, so the row is flagged instead."""
+    lists = ReferenceLists(project_codes=[{"Project Code": "SARDONYX"}])
+    row = a_row(narrative_raw="1/COVBURY ENERGI A/S FENNSTEAD 41, TFR+ SARDONYX CLOSING")
+    assert stages.matched_project_code(row, lists).value == "Flag for review - no project match"
+    # With the counterparty on a list, the same mention is usable.
+    known = ReferenceLists(project_codes=[{"Project Code": "SARDONYX"}],
+                           related_parties=["Covbury Energi A/S"])
+    assert stages.matched_project_code(row, known).value == "SARDONYX"
+
+
 def test_a_bank_fee_books_to_overhead_without_a_lookup() -> None:
     """31 rows have no project because the counterparty is the bank itself."""
     row = a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT")
