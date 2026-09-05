@@ -166,7 +166,7 @@ def upload():
 
 def rebuild() -> None:
     """Re-run the pipeline over whatever is now in the workspace."""
-    from src.matcher.run import apply_stages, load_masters
+    from src.matcher.run import apply_stages, load_lists
     from src.spine.build import load_workbook, parse_statements, write_sqlite
     from src.matcher.normalise import normalise
 
@@ -177,7 +177,7 @@ def rebuild() -> None:
     for row in rows:
         row.raw.narrative_normalised, _ = normalise(row.raw.narrative_raw)
     payload = [r.to_dict() for r in rows]
-    payload, _ = apply_stages(payload, load_masters())
+    payload, _, _ = apply_stages(payload, load_lists())
     ROWS.parent.mkdir(parents=True, exist_ok=True)
     ROWS.write_text(json.dumps(payload, indent=2))
     DECISIONS.unlink(missing_ok=True)

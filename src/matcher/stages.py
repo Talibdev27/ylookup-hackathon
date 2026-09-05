@@ -8,14 +8,22 @@ before touching the hard ones, so there is always a working pipeline to demo.
 """
 from __future__ import annotations
 
+from typing import Callable
+
 from src.contract import Alternative, Evidence, Field, Row
 from src.matcher import counterparty
 from src.matcher.abbreviations import expand
+from src.matcher.reference import ReferenceLists
+
+# Every stage has this shape. One row, the reference lists, one field out. A stage that
+# is not written yet raises NotImplementedError; anything else it raises is a defect and
+# the runner treats it as one.
+Stage = Callable[[Row, ReferenceLists], Field]
 
 # --------------------------------------------------------------------------- free
 
 
-def matched_legal_entity(row: Row, legal_entities: list[str]) -> Field:
+def matched_legal_entity(row: Row, lists: ReferenceLists) -> Field:
     """Account Name -> the full legal entity, from the 97-row master list.
 
     The bank abbreviates (`NI ABF II SCSP`); the master list spells it out. See
@@ -23,7 +31,7 @@ def matched_legal_entity(row: Row, legal_entities: list[str]) -> Field:
     top candidate is clear, because `NI V SCSP` also opens `... VI SCSp` and the
     reviewer should be able to see what was rejected.
     """
-    candidates = expand(row.raw.account_name, legal_entities)
+    candidates = expand(row.raw.account_name, lists.legal_entities)
     if not candidates:
         return Field(
             value=None,
@@ -50,7 +58,7 @@ def matched_legal_entity(row: Row, legal_entities: list[str]) -> Field:
     )
 
 
-def cash_leg_transtype(row: Row) -> Field:
+def cash_leg_transtype(row: Row, lists: ReferenceLists) -> Field:
     """The cash side of the journal, in the row currency.
 
     The Process sheet documents the rule as "Cash - Received or Cash - Disbursed in the
@@ -92,7 +100,7 @@ def cash_leg_transtype(row: Row) -> Field:
 # --------------------------------------------------------------------------- hard
 
 
-def pulled_out_sender_beneficiary(row: Row) -> Field:
+def pulled_out_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
     """Stage 2. The counterparty as the bank wrote it, with its span in the narrative.
 
     Human baseline: filled on 55 of 100 rows. Every string the staging sheet claims was
@@ -127,7 +135,7 @@ def pulled_out_sender_beneficiary(row: Row) -> Field:
     )
 
 
-def matched_sender_beneficiary(row: Row, masters: dict[str, list[str]]) -> Field:
+def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
     """Stage 4. The pulled name, matched against the reference lists.
 
     Human baseline: 48 of 100. The 52 they left blank are the opportunity, so an
@@ -144,18 +152,7 @@ def matched_sender_beneficiary(row: Row, masters: dict[str, list[str]]) -> Field
             evidence=Evidence(text="no name was found in the bank text to look up"),
         )
 
-    ordered = [
-        ("Related Party Master", masters.get("related_parties", [])),
-        ("Legal Entity Master List", masters.get("legal_entities", [])),
-        ("Investor Master List", masters.get("investors", [])),
-        ("Vendor Master List", masters.get("vendors", [])),
-        # Some counterparties are investment vehicles held per currency, and those live
-        # only in the deal list -- `NI GMF II Coöperatief U.A. - USD` is a deal name, not
-        # a related party. Last in priority, but the currency tag lets it outrank a
-        # currency-blind exact match on an earlier list.
-        ("Deal & Position Master List", masters.get("deal_names", [])),
-    ]
-    hits = counterparty.match(name, ordered, currency=row.raw.currency)
+    hits = counterparty.match(name, lists.counterparty_lists(), currency=row.raw.currency)
     if not hits:
         return Field(
             value=None,
@@ -181,14 +178,14 @@ def matched_sender_beneficiary(row: Row, masters: dict[str, list[str]]) -> Field
     )
 
 
-def matched_project_code(row: Row, project_codes: list[dict[str, str]]) -> Field:
+def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
     """Stage 3. Careful: this is not a plain lookup. In the ground truth, 30 of 100 rows
     carry the literal string 'Flag for review - no project match' and 26 carry
     'OH - Bank Fees'. Reproduce that vocabulary rather than leaving blanks."""
     raise NotImplementedError("W2")
 
 
-def classification(row: Row) -> Field:
+def classification(row: Row, lists: ReferenceLists) -> Field:
     """Stage 4. The Process sheet claims the vocabulary is
     Investment / Vendor / Related Party / Investor / Internal / Review.
 
@@ -197,7 +194,46 @@ def classification(row: Row) -> Field:
     raise NotImplementedError("W2")
 
 
-def resolved_position(row: Row, deals: list[dict[str, str]]) -> Field:
+def resolved_position(row: Row, lists: ReferenceLists) -> Field:
     """Stage 5. Position under the deal, from a 6,637-row master. Investments only --
     filled on 30 of 100 rows."""
     raise NotImplementedError("W2")
+
+
+def pulled_out_project_code(row: Row, lists: ReferenceLists) -> Field:
+    """Stage 3. The project word as the bank wrote it. Filled on 25 of 100 rows."""
+    raise NotImplementedError("W2")
+
+
+def counterparty_transtype(row: Row, lists: ReferenceLists) -> Field:
+    """Stage 4. The account the counterpart line books to. Filled on all 100 rows, and
+    26 of them are just `Expense - Bank Charges`. Rows booked to Suspense are the ones
+    the Process sheet asks a reviewer to investigate."""
+    raise NotImplementedError("W2")
+
+
+def resolved_deal(row: Row, lists: ReferenceLists) -> Field:
+    """Stage 5. The deal a position sits under. Filled on 30 of 100 rows, and falls out
+    of resolved_position -- the deal master carries both columns on one row."""
+    raise NotImplementedError("W2")
+
+
+# The stages in the order the Process sheet runs them. This list is the registry: adding
+# a stage means adding a function above and a line here, in one file.
+#
+# The order is load-bearing. matched_sender_beneficiary reads the field that
+# pulled_out_sender_beneficiary writes, so it has to come after it. That constraint used
+# to survive only as dict insertion order in another module; tests/test_stages.py now
+# asserts it.
+REGISTRY: list[tuple[str, Stage]] = [
+    ("matched_legal_entity", matched_legal_entity),
+    ("pulled_out_project_code", pulled_out_project_code),
+    ("matched_project_code", matched_project_code),
+    ("pulled_out_sender_beneficiary", pulled_out_sender_beneficiary),
+    ("matched_sender_beneficiary", matched_sender_beneficiary),
+    ("classification", classification),
+    ("cash_leg_transtype", cash_leg_transtype),
+    ("counterparty_transtype", counterparty_transtype),
+    ("resolved_deal", resolved_deal),
+    ("resolved_position", resolved_position),
+]

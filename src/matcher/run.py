@@ -1,92 +1,104 @@
 """Apply the matcher stages to data/rows.json, in place.
 
-This is W2's entry point. Add a stage to STAGES and it appears on the scoreboard.
-Stages that are not implemented yet are skipped, so the pipeline always runs end to end
-and the score only ever goes up.
+Every stage has the same shape, `(row, lists) -> Field`, and they run in the order
+declared by `stages.REGISTRY`. Adding a stage means writing a function and adding a line,
+both in `stages.py`.
+
+Three outcomes, kept apart on purpose:
+
+  applied            the stage produced a field
+  not written yet    the stage raised NotImplementedError, which is a declaration
+  failed             the stage raised something else, which is a defect
+
+The previous version could not tell the second from the third. It caught TypeError
+alongside NotImplementedError to detect stages whose arguments it had guessed wrong, so a
+genuine TypeError inside a working stage was reported as "not implemented yet" and the
+column silently scored 0/100. Uniform arity removed the need to guess, and the
+distinction is now real.
 
 Run:  python -m src.matcher.run
 """
 from __future__ import annotations
 
 import json
+import traceback
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from src.contract import Raw, Row
+from src.contract import Evidence, Field, Raw, Row
 from src.matcher import stages
+from src.matcher.reference import ReferenceLists
 from src.spine.build import load_workbook
 
 ROWS = Path("data/rows.json")
 
 
-def load_masters() -> dict[str, list]:
-    """The reference lists each stage matches against, loaded once."""
-    sheets = load_workbook()
-    return {
-        "legal_entities": [list(r.values())[0] for r in sheets["Legal Entity Master List"]],
-        "related_parties": [r["Related Party"] for r in sheets["Related Party Master"]],
-        "investors": sorted({r["Investor"] for r in sheets["Investor Master List"]}),
-        "vendors": sorted({r["Vendor"] for r in sheets["Vendor Master List"]}),
-        "project_codes": sheets["Project Code Report"],
-        "deals": sheets["Deal & Position Master List"],
-        "deal_names": sorted({d["Deal Name"] for d in sheets["Deal & Position Master List"] if d["Deal Name"]}),
-    }
-
-# field key -> (callable, names of the master lists it needs)
-NEEDS = {
-    "matched_legal_entity": ("legal_entities",),
-    "matched_sender_beneficiary": ("__all__",),
-}
-
-STAGES = {
-    "cash_leg_transtype": stages.cash_leg_transtype,
-    "matched_legal_entity": stages.matched_legal_entity,
-    "pulled_out_sender_beneficiary": stages.pulled_out_sender_beneficiary,
-    "matched_sender_beneficiary": stages.matched_sender_beneficiary,  # reads the stage above
-    "matched_project_code": stages.matched_project_code,
-    "classification": stages.classification,
-    "resolved_position": stages.resolved_position,
-}
+def load_lists() -> ReferenceLists:
+    return ReferenceLists.from_workbook(load_workbook())
 
 
-def apply_stages(payload: list[dict], masters: dict[str, list] | None = None) -> tuple[list[dict], list[str]]:
-    masters = masters or {}
-    skipped: list[str] = []
+def _failed(stage_name: str, error: Exception) -> Field:
+    """What a reviewer sees when a stage breaks on their row.
+
+    The row stays in the queue, because silently dropping a transaction out of a
+    financial review is the exact failure this product argues against. The wording is
+    plain English: the review screen renders `evidence.text` verbatim to a fund manager,
+    and a traceback is the one thing that would break that. The technical detail goes to
+    the console.
+    """
+    return Field(
+        value=None,
+        confidence=0.0,
+        status="unresolved",
+        evidence=Evidence(
+            text="We hit a problem working this out, so it needs a person to look at it.",
+            source_list=f"{stage_name} ({type(error).__name__})",
+        ),
+    )
+
+
+def apply_stages(
+    payload: list[dict], lists: ReferenceLists | None = None
+) -> tuple[list[dict], list[str], Counter]:
+    """Run every stage over every row. Returns the rows, the stages that are not written
+    yet, and a count of per-stage failures."""
+    lists = lists or ReferenceLists()
+    unwritten: list[str] = []
+    failures: Counter = Counter()
+
     for entry in payload:
         row = Row(row_id=entry["row_id"], source=entry["source"], raw=Raw(**entry["raw"]))
-        for key, stage in STAGES.items():
-            needed = NEEDS.get(key, ())
-            args = [masters if name == "__all__" else masters[name]
-                    for name in needed if name == "__all__" or name in masters]
-            if len(args) != len(needed):
-                if key not in skipped:
-                    skipped.append(key)
+        for name, stage in stages.REGISTRY:
+            if name in unwritten:
                 continue
             try:
-                field = stage(row, *args)
+                result = stage(row, lists)
             except NotImplementedError:
-                if key not in skipped:
-                    skipped.append(key)
+                unwritten.append(name)
                 continue
-            except TypeError:
-                # stage needs master-list arguments it has not been wired to yet
-                if key not in skipped:
-                    skipped.append(key)
-                continue
-            row.fields[key] = field
-            entry.setdefault("fields", {})[key] = asdict(field)
-    return payload, skipped
+            except Exception as error:  # a defect in the stage, not a missing stage
+                if not failures[name]:
+                    traceback.print_exc()
+                failures[name] += 1
+                result = _failed(name, error)
+            row.fields[name] = result
+            entry.setdefault("fields", {})[name] = asdict(result)
+    return payload, unwritten, failures
 
 
 def main() -> int:
     payload = json.loads(ROWS.read_text())
-    payload, skipped = apply_stages(payload, load_masters())
+    payload, unwritten, failures = apply_stages(payload, load_lists())
     ROWS.write_text(json.dumps(payload, indent=2))
-    done = [k for k in STAGES if k not in skipped]
-    print(f"matcher: {len(done)}/{len(STAGES)} stages applied to {len(payload)} rows")
-    if skipped:
-        print("  not implemented yet: " + ", ".join(skipped))
-    return 0
+
+    applied = len(stages.REGISTRY) - len(unwritten)
+    print(f"matcher: {applied}/{len(stages.REGISTRY)} stages applied to {len(payload)} rows")
+    if unwritten:
+        print("  not written yet: " + ", ".join(unwritten))
+    for name, count in failures.items():
+        print(f"  FAILED: {count} row(s) in {name} -- see the traceback above")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
