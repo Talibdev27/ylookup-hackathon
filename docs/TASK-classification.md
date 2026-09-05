@@ -1,9 +1,15 @@
 # Task · `classification` and `counterparty_transtype`
 
-Two columns, both filled on all 100 ground-truth rows, both currently scoring **0/100**.
-Self-contained: you work in one file and nobody else needs to touch it.
+Two columns, filled on all 100 ground-truth rows, both scoring **0/100** right now.
+Together they are the largest block of unclaimed score left. You work in one file,
+`src/matcher/stages.py`, so nobody else is in your way.
 
-## Get running (5 minutes)
+Read `AGENTS.md` first — it has the conventions and the loop. Then work these steps in
+order. Each one ends on something you can check, and each one is a commit.
+
+---
+
+## Step 0 · Get a baseline
 
 ```bash
 git clone https://github.com/Talibdev27/ylookup-hackathon.git
@@ -12,30 +18,27 @@ pip3 install -r requirements.txt
 ./run.sh
 ```
 
-You need the dataset in `~/Downloads/Ylookup Hackathon Datasets/`, or set `YLOOKUP_DATA`
-to wherever it is. `./run.sh` prints the scoreboard. That number is your target.
+The dataset needs to be at `~/Downloads/Ylookup Hackathon Datasets/`, or set
+`YLOOKUP_DATA` to wherever you put it.
 
-## What you are writing
+Save the scoreboard `./run.sh` prints. Every later step is measured against it, and two
+of its rows are yours:
 
-Two functions in `src/matcher/stages.py`. Both already exist as stubs that raise
-`NotImplementedError` — replace the body, nothing else.
-
-```python
-def classification(row: Row, lists: ReferenceLists) -> Field: ...
-def counterparty_transtype(row: Row, lists: ReferenceLists) -> Field: ...
+```
+classification                             0/100      0          0/0
+counterparty_transtype                     0/100      0          0/0
 ```
 
-Every stage has that shape. Copy `matched_legal_entity` or `cash_leg_transtype` — they are
-short, implemented, and show the conventions: always return a `Field` with a `confidence`,
-a `status`, and an `Evidence` saying where the answer came from. **Never return a bare
-value.** A field with no evidence cannot be reviewed, and the review screen renders
-`evidence.text` to a fund manager, so write it in their language.
+**Done when** `./run.sh` prints a scoreboard and `./run-tests.sh` is green on a clean
+clone.
 
-Then: `./run.sh` and watch your two rows on the scoreboard.
+---
 
-## `classification` — the head start
+## Step 1 · `classification`, the free rules
 
-The ground truth splits seven ways:
+The ground truth splits seven ways. **The vocabulary is not what the `Process` sheet
+claims** — it says "Investment, Vendor, Related Party, Investor, Internal, or Review", but
+there is no `Investor`, and `Other` and `Investment Transfer` both appear. Trust the data.
 
 | Count | Value |
 |---:|---|
@@ -47,14 +50,9 @@ The ground truth splits seven ways:
 | 6 | `Vendor` |
 | 3 | `Review` |
 
-**Note the vocabulary is not what the docs say.** The `Process` sheet claims it is
-"Investment, Vendor, Related Party, Investor, Internal, or Review". The data says
-otherwise — there is no `Investor`, and `Other` and `Investment Transfer` both appear.
-Trust the data.
-
-**The big shortcut:** classification correlates strongly with *which reference list the
-counterparty matched against*, and the matcher already records that in
-`row.fields["matched_sender_beneficiary"].evidence.source_list`. Measured on the current
+The shortcut: classification tracks **which reference list the counterparty matched
+against**, and the matcher already records that in
+`row.fields["matched_sender_beneficiary"].evidence.source_list`. Measured on current
 output:
 
 | Matched in | Classification | Hit rate |
@@ -62,19 +60,48 @@ output:
 | `Deal & Position Master List` | `Investment` | 6 / 6 |
 | `Investor Master List` | `Related Party` | 5 / 5 |
 | `Vendor Master List` | `Vendor` | 6 / 7 |
-| `Related Party Master` | splits 4 ways | needs the narrative |
-| no match at all | `Other` 32, `Internal` 10, `Investment Transfer` 9 | needs the narrative |
+| `Related Party Master` | splits four ways | step 2 |
+| no match at all | `Other` 32, `Internal` 10, `Investment Transfer` 9 | step 2 |
 
-So roughly 17 rows are three `if` statements. The rest needs narrative keywords —
-`INTERNAL TRANSFER` is the obvious one for `Internal`. Start with the free ones, commit,
-then work the residue. Do not try to be clever before the scoreboard moves.
+Write those three rules and nothing else. `matched_sender_beneficiary` runs before you in
+`REGISTRY`, so read its field rather than recomputing it. Everything you cannot decide
+yet returns `status="needs_review"` with an honest `evidence.text`.
 
-`matched_sender_beneficiary` runs before you in `stages.REGISTRY`, so its field is already
-on `row.fields` when your stage is called. Read it, don't recompute it.
+**Done when** `classification` scores at least 15/100 and no other row on the scoreboard
+has moved. Commit.
 
-## `counterparty_transtype` — the head start
+---
 
-The account the counterpart line books to. Top values:
+## Step 2 · `classification`, the residue
+
+52 rows have no counterparty match at all and split `Other` 32, `Internal` 10,
+`Investment Transfer` 9, `Review` 3 (approximately — check it yourself). 23 more matched
+against `Related Party Master` and split four ways.
+
+The narrative is your evidence. `INTERNAL TRANSFER` is the obvious handle for `Internal`;
+find the rest by reading rows rather than guessing at them:
+
+```bash
+python3 - <<'EOF'
+from src.spine.build import load_workbook
+for t in load_workbook()["Staging Sheet"]:
+    if t["Classification"] == "Internal":
+        print(" ".join(t["Narrative"].split())[:110])
+EOF
+```
+
+`Other` is the majority class, so it is the sane fallback — but a fallback returns
+`needs_review`, not `auto`. Guessing `Other` confidently on 32 rows scores well and lies
+to the reviewer.
+
+**Done when** `classification` is above 55/100 and every value you emit is one of the
+seven real ones. Commit.
+
+---
+
+## Step 3 · `counterparty_transtype`, the bank charges
+
+The account the counterpart line books to.
 
 | Count | Value |
 |---:|---|
@@ -86,28 +113,58 @@ The account the counterpart line books to. Top values:
 | 7 | `Accounts Payable` |
 | 6 | `Currency Correcting Credit` |
 | 6 | `Receivable` |
+| 5 | `Investments - Loan - Purchase` |
+| 5 | `Income - Bank Interest` |
+| 5 | `Receivable - Related Party` |
+| 4 | `Suspense (debit)` |
 
-**26 of 100 are bank charges**, and those rows are recognisable from the narrative
-(`CHARGES FOR`, `CHARGE WAIVED`, `CREDIT INTEREST`). That alone is a quarter of the column.
-The `CoA` sheet holds the full 560-row chart of accounts if you want to validate that a
-value you are about to emit actually exists.
+**26 of 100 are bank charges**, and those rows say so in the narrative — `CHARGES FOR`,
+`CHARGE WAIVED`. `CREDIT INTEREST` is `Income - Bank Interest`. That is a third of the
+column from narrative keywords.
 
-`row.fields["classification"]` is available to you if you register after it — the
-`Investments - Equity - Purchase` and `Payable - Related Party` values clearly track it.
+The `CoA` sheet holds the 560-row chart of accounts; reach it through
+`ReferenceLists` if you want to check a value you are about to emit actually exists.
+Rows the `Process` sheet says to book to Suspense are the ones it asks a reviewer to
+investigate, so those are `needs_review` by definition.
 
-## Rules of the road
+**Done when** `counterparty_transtype` is above 30/100. Commit.
 
-- **Measure, don't guess.** After every change run `./run.sh`. If a number goes down,
-  revert. Three of us have already lost time to a change that looked obviously better and
-  scored worse — the reasoning is recorded in `complete()` in `src/matcher/counterparty.py`
-  if you want the example.
-- **Run `./run-tests.sh` before you push.** It exits non-zero on the first failure.
-- **Add a test in `tests/test_stages.py`.** There is a three-line fake `ReferenceLists` at
-  the top; you do not need the real workbook to test a stage.
-- **Unsure is a valid answer.** `status="needs_review"` with an honest `evidence.text` is
-  worth more than a confident wrong value. The whole product is about being told when the
-  machine is not sure.
+---
 
-## Read first
+## Step 4 · `counterparty_transtype`, the rest
 
-`CONTEXT.md` for the vocabulary, then `docs/W2-matcher.md`. Both are short.
+Register after `classification` and its field is available to you on `row.fields`. The
+`Investments - …` and `… - Related Party` values clearly track it, and `Currency
+Correcting Debit` / `Credit` track the direction of the amount.
+
+**Done when** the number stops moving on two consecutive attempts. Then stop and tell the
+team — there is more score in `matched_project_code` (100 rows filled, 30 of them the
+literal string `Flag for review - no project match`) than in grinding the last few here.
+
+---
+
+## Step 5 · Tests, then push
+
+Add cases to `tests/test_stages.py` beside the existing ones. There is a three-line fake
+`ReferenceLists` at the top, so a stage test needs no workbook and runs instantly.
+
+Cover, for each of your two stages: one row it gets right, and one row it should hand to
+the reviewer.
+
+```bash
+./run-tests.sh   # green
+./run.sh         # your two rows up, every other row unchanged
+git push
+```
+
+**Done when** both are true and the push lands on `main`.
+
+---
+
+## The one rule that matters
+
+**Measure after every change.** If a number drops, revert — the reasoning that convinced
+you was wrong, and finding out why costs more than it returns. `complete()` in
+`src/matcher/counterparty.py` carries three implementations measured against each other,
+where the cleverest scored 7/55 against the simplest at 37/55. That comment exists so the
+next person does not spend the hour again.
