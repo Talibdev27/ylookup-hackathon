@@ -113,6 +113,37 @@ def test_the_deal_master_settles_a_spelling_the_lists_disagree_about() -> None:
     assert result.evidence.source_list == "Related Party Master", "but found on the related parties"
 
 
+def test_the_same_entity_written_short_or_long_is_one_counterparty() -> None:
+    """The group writes its own entities both ways and the sheets disagree about which.
+    Both directions resolve, and the Process sheet's list order decides the spelling."""
+    row = a_row(narrative_raw="52443473437109, NI ABF II SCSP")
+    lists = ReferenceLists(
+        related_parties=["Nordvik Infrastructure Advanced Bioenergy Fund II SCSp"],
+    )
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    spelled_out = stages.matched_sender_beneficiary(row, lists)
+    assert spelled_out.value == "Nordvik Infrastructure Advanced Bioenergy Fund II SCSp"
+
+    # ... and the other way round: the statement spells it out, the sheet abbreviates.
+    row = a_row(narrative_raw="52443473437109, NORDVIK INFRASTRUCTURE V CN SCSP")
+    lists = ReferenceLists(
+        related_parties=["NI V CN SCSp"],
+        legal_entities=["Nordvik Infrastructure V CN SCSp"],
+    )
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    shortened = stages.matched_sender_beneficiary(row, lists)
+    assert shortened.value == "NI V CN SCSp", "the related party master outranks the entity list"
+
+
+def test_a_roman_numeral_is_not_an_initial() -> None:
+    """`I` opens `II`, so a loose initialism check quietly resolves fund I to fund II.
+    An initialism token stands for two or more words, or is a word outright."""
+    row = a_row(narrative_raw="52443473437109, NI ABF II SCSP")
+    lists = ReferenceLists(related_parties=["NI ABF I SCSp"])
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    assert stages.matched_sender_beneficiary(row, lists).value != "NI ABF I SCSp"
+
+
 def test_classification_reads_the_list_the_counterparty_matched_against() -> None:
     """A vendor is a Vendor. The stage never looks at the name, only at where it was
     found -- which is the whole reason `matched_sender_beneficiary` records the list."""

@@ -77,3 +77,40 @@ def expand(abbreviation: str, master: list[str]) -> list[Expansion]:
         if exact is not None:
             found.append(Expansion(value=entry, exact_tokens=exact, total_tokens=len(tokens)))
     return sorted(found, key=lambda e: (-e.exact_tokens, len(e.value)))
+
+
+def is_initialism_of(abbreviation: str, name: str) -> bool:
+    """True when `abbreviation` is `name` written in initials, with nothing left over.
+
+    Stricter than `expand` on purpose. `expand` lets a one-letter token open a longer
+    word, which is what makes `NI ABF I SCSP` also a candidate for `... Fund II SCSp`;
+    it resolves that by ranking whole-word matches first across the candidates it is
+    given. A caller asking about one name at a time has no such ranking to fall back on,
+    so the same looseness turns `I` into `II` silently.
+
+    Here every token must either be one of the name's words outright, or stand for two or
+    more of them -- which is what an initialism is. `NI` for `Nordvik Infrastructure`
+    passes; `I` for `II` does not.
+    """
+    tokens = [t.upper() for t in _words(abbreviation)]
+    words = _words(name)
+    if not tokens or not words:
+        return False
+    index = 0
+    for token in tokens:
+        if index < len(words) and words[index].upper() == token:
+            index += 1
+            continue
+        span = len(token)
+        if (
+            span >= 2
+            and index + span <= len(words)
+            and all(
+                words[index + offset].upper().startswith(token[offset])
+                for offset in range(span)
+            )
+        ):
+            index += span
+            continue
+        return False
+    return index == len(words)

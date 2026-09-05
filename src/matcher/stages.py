@@ -193,7 +193,7 @@ def matched_sender_beneficiary(row: Row, lists: ReferenceLists) -> Field:
         loose = counterparty.match_by_legal_form(name, lists.counterparty_lists())
         if loose:
             return Field(
-                value=loose.value,
+                value=lists.canonical_spelling(loose.value),
                 confidence=loose.confidence,
                 status="auto",
                 evidence=Evidence(

@@ -313,6 +313,31 @@ def _index(entries: list[str]) -> dict[str, str]:
 CURRENCY_SUFFIX = re.compile(r"\s-\s([A-Z]{3})$")
 
 
+def _abbreviation_equivalents(name: str, entries: list[str]) -> list[str]:
+    """Entries that are the same counterparty as `name`, written at a different length.
+
+    The group writes its own entities both ways, and the reference lists disagree about
+    which. `NI ABF II SCSP` on a statement is `Nordvik Infrastructure Advanced Bioenergy
+    Fund II SCSp` on the related party master; `NORDVIK INFRASTRUCTURE V CN SCSP` on a
+    statement is `NI V CN SCSp` on the same sheet. Same relationship, opposite direction,
+    so both directions are tried.
+
+    An initialism consumed exactly -- every token accounted for, nothing left over on
+    either side -- is close to an exact match in strength, and much stronger than a
+    partial string overlap. It is scored just under an exact spelling match so that a
+    list holding the name outright still wins over a list holding its abbreviation.
+    """
+    from src.matcher.abbreviations import is_initialism_of
+
+    equivalent = []
+    for entry in entries:
+        if fold(entry) == fold(name):
+            continue  # already an exact match; this tier is for the ones that are not
+        if is_initialism_of(name, entry) or is_initialism_of(entry, name):
+            equivalent.append(entry)
+    return equivalent
+
+
 def match(
     name: str, lists: list[tuple[str, list[str]]], currency: str | None = None
 ) -> list[Match]:
@@ -333,6 +358,8 @@ def match(
     found: list[Match] = []
     for rank, (list_name, entries) in enumerate(lists):
         penalty = rank * 0.02  # a nudge, so priority breaks ties without hiding a better match
+        for entry in _abbreviation_equivalents(name, entries):
+            found.append(Match(entry, round(0.97 - penalty, 2), list_name))
         for folded, original in _index(entries).items():
             if folded == target:
                 found.append(Match(original, round(0.98 - penalty, 2), list_name))
