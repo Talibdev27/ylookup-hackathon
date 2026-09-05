@@ -354,11 +354,127 @@ def pulled_out_project_code(row: Row, lists: ReferenceLists) -> Field:
     raise NotImplementedError("W2")
 
 
+# What the counterpart line books to, given what kind of transaction it is and which way
+# the money went: (money in, money out). `Investment` is not in here because equity and
+# loan both go out, and the bank text is what separates them -- see the stage.
+#
+# This is the whole column, near enough. Measured against the ground truth with the
+# human's own classification substituted in, the table is right on 98 of 100 rows, which
+# says the account is a consequence of the classification rather than a separate question.
+COUNTERPART_ACCOUNTS: dict[str, tuple[str, str]] = {
+    "Other": ("Income - Bank Interest", "Expense - Bank Charges"),
+    "Internal": ("Currency Correcting Credit", "Currency Correcting Debit"),
+    "Investment Transfer": ("Receivable", "Payable - Third Party"),
+    "Related Party": ("Receivable - Related Party", "Payable - Related Party"),
+    "Vendor": ("Accounts Payable", "Accounts Payable"),
+    "Review": ("Suspense (credit)", "Suspense (debit)"),
+}
+
+# How to describe each kind to a reviewer, so the reason reads as a sentence.
+KIND_PHRASES = {
+    "Other": "this is the bank charging a fee or paying interest",
+    "Internal": "this is a transfer between the fund's own accounts",
+    "Investment Transfer": "this is a transfer between two funds",
+    "Related Party": "this is a payment with a related party",
+    "Vendor": "this is a payment to a supplier",
+    "Review": "this row was flagged for review",
+}
+
+
 def counterparty_transtype(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 4. The account the counterpart line books to. Filled on all 100 rows, and
-    26 of them are just `Expense - Bank Charges`. Rows booked to Suspense are the ones
-    the Process sheet asks a reviewer to investigate."""
-    raise NotImplementedError("W2")
+    """Stage 4. The account the counterpart line books to.
+
+    Filled on all 100 rows, across twelve different accounts. It looks like the hardest
+    column on the sheet and it is very nearly the easiest, because it is not an
+    independent question: once you know what kind of transaction this is and which way
+    the money went, the account follows. A transfer between two funds is a `Receivable`
+    when the money came in and a `Payable - Third Party` when it went out.
+
+    So this stage reads `classification` rather than the narrative, and inherits its
+    doubt: the Process sheet's own instruction is that each value is only as good as the
+    stage before it, so a classification that went to a reviewer sends this there too.
+
+    Two accounts do not fall out of the table:
+
+    * `Investment` splits into equity and loan, and both go out. The bank says which.
+    * `Suspense` is not an answer, it is the Process sheet parking a row for somebody to
+      investigate -- so those rows go to a reviewer however confident the table is.
+    """
+    decided = row.fields.get("classification")
+    kind = decided.value if decided else None
+    if not kind:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="needs_review",
+            evidence=Evidence(
+                text=(
+                    "we could not say what kind of transaction this is, so we cannot say "
+                    "what account the other side belongs in"
+                ),
+                source_list="Process sheet, stage 4",
+            ),
+        )
+
+    incoming = (row.raw.credit or 0) > 0
+    narrative = row.raw.narrative_raw.upper()
+    alternative: str | None = None
+
+    if kind == "Investment":
+        equity = "EQUITY:" in narrative
+        value = "Investments - Equity - Purchase" if equity else "Investments - Loan - Purchase"
+        alternative = "Investments - Loan - Purchase" if equity else "Investments - Equity - Purchase"
+        reason = (
+            "the bank text calls this equity"
+            if equity
+            else "the bank text describes a loan rather than equity"
+        )
+    elif kind == "Internal" and not incoming and "INTERNAL TRANSFER" in narrative:
+        # The Process sheet parks a plain internal transfer out rather than booking it.
+        value = "Suspense (debit)"
+        alternative = "Currency Correcting Debit"
+        reason = (
+            "the bank calls this an internal transfer but does not say what it was for, "
+            "so it is parked for somebody to investigate"
+        )
+    elif kind in COUNTERPART_ACCOUNTS:
+        pair = COUNTERPART_ACCOUNTS[kind]
+        value, alternative = (pair[0], pair[1]) if incoming else (pair[1], pair[0])
+        reason = (
+            f"{KIND_PHRASES[kind]}, and the money "
+            f"{'came in' if incoming else 'went out'}"
+        )
+    else:
+        return Field(
+            value=None,
+            confidence=0.0,
+            status="needs_review",
+            evidence=Evidence(
+                text=f"we have no rule for booking a {kind!r} transaction",
+                source_list="Process sheet, stage 4",
+            ),
+        )
+
+    parked = value.startswith("Suspense")
+    inherited = decided.status != "auto"
+    if parked or inherited:
+        status, confidence = "needs_review", 0.5
+    else:
+        status, confidence = "auto", 0.9
+    if inherited and not parked:
+        reason += ", but that depends on the type of transaction, which is not settled yet"
+
+    return Field(
+        value=value,
+        confidence=confidence,
+        status=status,
+        evidence=Evidence(
+            span=decided.evidence.span,
+            text=reason,
+            source_list="Process sheet, stage 4",
+        ),
+        alternatives=[Alternative(value=alternative, confidence=0.3)] if alternative else [],
+    )
 
 
 def resolved_deal(row: Row, lists: ReferenceLists) -> Field:

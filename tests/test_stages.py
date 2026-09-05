@@ -108,6 +108,38 @@ def test_a_fee_line_that_also_waives_a_charge_is_still_a_fee() -> None:
     assert stages.classification(row, LISTS).value == "Other"
 
 
+def test_counterparty_transtype_follows_the_kind_and_the_direction() -> None:
+    """Same vendor, same narrative, opposite sign. The account is a consequence of the
+    classification and which way the money went, not a separate question."""
+    row = a_row()
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    row.fields["classification"] = stages.classification(row, LISTS)
+    result = stages.counterparty_transtype(row, LISTS)
+    assert result.value == "Accounts Payable" and result.status == "auto"
+    assert result.alternatives, "the reviewer is given the other side to pick from"
+
+
+def test_a_suspense_row_goes_to_a_reviewer_however_clear_the_rule_is() -> None:
+    """`Suspense` is not an answer. It is the Process sheet parking a row for somebody
+    to investigate, so it never books through unseen."""
+    row = a_row(narrative_raw="NI V SCSP, 22801YB03UF8, INTERNAL TRANSFER")
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    row.fields["classification"] = stages.classification(row, LISTS)
+    result = stages.counterparty_transtype(row, LISTS)
+    assert result.value == "Suspense (debit)" and result.status == "needs_review"
+
+
+def test_counterparty_transtype_inherits_the_doubt_of_the_stage_before_it() -> None:
+    """The Process sheet's own rule: each value is only as good as the stage before it."""
+    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    row.fields["classification"] = stages.classification(row, LISTS)
+    result = stages.counterparty_transtype(row, LISTS)
+    assert result.value is None and result.status == "needs_review"
+
+
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
     row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)

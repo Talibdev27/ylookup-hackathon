@@ -22,7 +22,12 @@ def test_running_the_sample_workspace() -> None:
     assert result.rows == 100
     assert result.sheets == 15
     assert result.stages_total == 10
-    assert result.stages_applied == 5, "five stages are declared unwritten"
+    assert set(result.unwritten) == {
+        "pulled_out_project_code",
+        "matched_project_code",
+        "resolved_deal",
+        "resolved_position",
+    }, "the columns still to be written -- naming them says which, where a count did not"
     assert result.ok, f"stages failed: {dict(result.failures)}"
 
     rows = json.loads(pipeline.ROWS.read_text())
