@@ -7,6 +7,8 @@ the matcher was unsure about. `README.md` covers what it is and how to run it.
 
 - `CONTEXT.md` — the domain words. Read it before naming anything.
 - `CONTRACT.md` — the row shape every part of the system passes around.
+- `docs/ARCHITECTURE.md` — the whole backend, stage by stage, and how one transaction
+  moves through all of them. Read it before touching a piece you did not write.
 - `docs/TASK-*.md` — a self-contained brief per open piece of work, in ordered steps.
   Start at the one you were handed.
 - `docs/adr/` — decisions that would otherwise look like mistakes. Read before arguing

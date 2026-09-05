@@ -70,6 +70,8 @@ answer different questions:
 
 ## Layout
 
+See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
+
 | Path | Owner | What |
 |---|---|---|
 | `src/contract.py` | shared | The row shape. Read `CONTRACT.md` before touching it. |
@@ -78,8 +80,9 @@ answer different questions:
 | `src/matcher/` | W2 | The Process-sheet stages, `ReferenceLists`, and `score.py` |
 | `src/exporter.py` | — | The reviewed queue as a spreadsheet, with who decided each answer |
 | `src/ui/` | W3 | Exception-first review queue |
-| `src/journal/` | W4 | Stage 6: two DIU lines per Batch ID |
-| `docs/` | all | Active task briefs, the roadmap, the decision records, and `counterparty-matching.md` / `deal-resolution.md` — how the hard columns work, and what was measured and rejected getting there |
+| `src/extraction/` | — | Document-agnostic PDF reading and Excel output, for document types beyond statements |
+| `src/checks/` | — | Automated inconsistency checks over already-structured records |
+| `docs/` | all | Active task briefs, the architecture, the roadmap, the decision records, and `counterparty-matching.md` / `deal-resolution.md` — how the hard columns work, and what was measured and rejected getting there |
 
 ## Requirements
 
