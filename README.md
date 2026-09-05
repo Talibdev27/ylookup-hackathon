@@ -52,24 +52,27 @@ the administrator's own file, in one run. The reasoning is in
 `./run.sh` prints this. Ten of ten columns have a stage behind them; PDF extraction is
 100/100 against ground truth.
 
-| Field | agreement | net new |
+| Column | agreement | net new |
 |---|---|---|
-| `matched_legal_entity` | 100/100 | — |
-| `cash_leg_transtype` | 100/100 | — |
-| `pulled_out_project_code` | 25/25 | 0/75 |
-| `classification` | 93/100 | — |
-| `matched_project_code` | 92/100 | — |
-| `counterparty_transtype` | 92/100 | — |
-| `pulled_out_sender_beneficiary` | 45/55 | 45/45 |
-| `matched_sender_beneficiary` | 31/48 | 8/52 |
-| `resolved_deal` | 25/30 | 0/70 |
-| `resolved_position` | 13/30 | 0/70 |
+| **Fund** · `matched_legal_entity` | 100/100 | — |
+| **Cash side of the entry** · `cash_leg_transtype` | 100/100 | — |
+| **Project mentioned** · `pulled_out_project_code` | 25/25 | 0/75 |
+| **Type of transaction** · `classification` | 93/100 | — |
+| **Project code** · `matched_project_code` | 92/100 | — |
+| **Other side of the entry** · `counterparty_transtype` | 92/100 | — |
+| **Name in the bank text** · `pulled_out_sender_beneficiary` | 45/55 | 45/45 |
+| **Counterparty** · `matched_sender_beneficiary` | 31/48 | 8/52 |
+| **Deal** · `resolved_deal` | 25/30 | 0/70 |
+| **Position** · `resolved_position` | 13/30 | 0/70 |
 
-A column's misses are not all defects. `matched_sender_beneficiary` disagrees on fourteen
-rows and sends eleven of them to a reviewer rather than booking something wrong.
-`resolved_position` reads worst and is not: on 26 of its 30 rows the reviewer gets either
-the answer or a short list with the answer on it, because a deal holding several equally
-valid positions gets a shortlist instead of a guess. Every missing point is accounted for
+A dash under *net new* means the human left nothing blank in that column, so there was
+nothing for us to resolve.
+
+A column's misses are not all defects. **Counterparty** disagrees on fourteen rows and
+sends eleven of them to a reviewer rather than booking something wrong. **Position** reads
+worst and is not: on 26 of its 30 rows the reviewer gets either the answer or a short list
+with the answer on it, because a deal holding several equally valid positions gets a
+shortlist instead of a guess. Every missing point is accounted for
 row by row in [`docs/where-the-points-go.md`](docs/where-the-points-go.md).
 
 ## Using it on your own data
