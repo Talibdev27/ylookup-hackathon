@@ -186,12 +186,67 @@ def matched_project_code(row: Row, lists: ReferenceLists) -> Field:
 
 
 def classification(row: Row, lists: ReferenceLists) -> Field:
-    """Stage 4. The Process sheet claims the vocabulary is
-    Investment / Vendor / Related Party / Investor / Internal / Review.
+    """Stage 4. What kind of transaction this is.
 
-    The data disagrees. Actual top values are 'Other' (32), 'Internal' (17),
-    'Investment Transfer' (15). Trust the data, not the doc."""
-    raise NotImplementedError("W2")
+    The Process sheet claims the vocabulary is Investment / Vendor / Related Party /
+    Investor / Internal / Review. The data disagrees: there is no `Investor` at all, and
+    `Other` (32) and `Investment Transfer` (15) both appear. VOCABULARY is the data's.
+
+    The handle is that classification largely tracks *which reference list the
+    counterparty matched against*, which `matched_sender_beneficiary` has already
+    recorded. Three of those lists answer the question outright, measured on the 100
+    ground-truth rows:
+
+        Deal & Position Master List  ->  Investment      6 / 6
+        Investor Master List         ->  Related Party   5 / 5
+        Vendor Master List           ->  Vendor          6 / 7
+
+    `Investor Master List -> Related Party` reads wrong and is not. These are the fund's
+    own feeder vehicles: they are listed as investors and booked as related parties.
+
+    The other two outcomes -- matched in `Related Party Master`, or matched nowhere at
+    all -- carry 82 of the 100 rows and split four ways each. Those are the narrative's
+    job, and until that is written they go to a reviewer rather than take the majority
+    value: guessing `Other` would score well and lie about it.
+    """
+    matched = row.fields.get("matched_sender_beneficiary")
+    source = matched.evidence.source_list if matched and matched.value else ""
+
+    decisive = {
+        "Deal & Position Master List": ("Investment", "the deal list"),
+        "Investor Master List": ("Related Party", "the investor list"),
+        "Vendor Master List": ("Vendor", "the vendor list"),
+    }
+    if source in decisive:
+        value, where = decisive[source]
+        return Field(
+            value=value,
+            confidence=0.9,
+            status="auto",
+            evidence=Evidence(
+                span=matched.evidence.span,
+                text=f"{matched.value!r} is on {where}",
+                source_list=source,
+            ),
+        )
+
+    reason = (
+        f"{matched.value!r} is a related party, and related parties are booked several "
+        "different ways depending on what the payment was for"
+        if source
+        else "we could not tell who this was to or from, so we cannot say what kind of "
+        "transaction it is"
+    )
+    return Field(
+        value=None,
+        confidence=0.0,
+        status="needs_review",
+        evidence=Evidence(
+            span=matched.evidence.span if matched else None,
+            text=reason,
+            source_list=source or "Narrative",
+        ),
+    )
 
 
 def resolved_position(row: Row, lists: ReferenceLists) -> Field:

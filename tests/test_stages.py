@@ -69,6 +69,26 @@ def test_matched_sender_beneficiary_reads_the_stage_before_it() -> None:
     assert result.value == "Trentbeck Audit - Lu", "master lists carry office suffixes"
 
 
+def test_classification_reads_the_list_the_counterparty_matched_against() -> None:
+    """A vendor is a Vendor. The stage never looks at the name, only at where it was
+    found -- which is the whole reason `matched_sender_beneficiary` records the list."""
+    row = a_row()
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    result = stages.classification(row, LISTS)
+    assert result.value == "Vendor" and result.status == "auto"
+
+
+def test_classification_asks_rather_than_guessing_the_majority_value() -> None:
+    """`Other` is the most common answer on 32 of 100 rows, so returning it whenever we
+    cannot tell would score well and lie to the reviewer about how it got there."""
+    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    result = stages.classification(row, LISTS)
+    assert result.value is None and result.status == "needs_review"
+
+
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
     row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
@@ -108,7 +128,7 @@ def test_a_broken_stage_is_a_failure_not_an_unwritten_stage(monkeypatch=None) ->
 def test_an_unwritten_stage_is_reported_once_and_skipped() -> None:
     payload = [{"row_id": 1, "source": {}, "raw": a_row().raw.__dict__.copy(), "fields": {}}]
     _, unwritten, failures = apply_stages(payload, LISTS)
-    assert "classification" in unwritten
+    assert "matched_project_code" in unwritten
     assert not failures
 
 
