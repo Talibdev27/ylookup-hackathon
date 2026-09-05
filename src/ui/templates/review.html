@@ -17,6 +17,9 @@
   .val { font-weight:500; }
   .num { font-variant-numeric:tabular-nums; color:var(--muted); }
   .unresolved { color:var(--warn); }
+  .why { color:var(--muted); font-size:13px; padding:2px 0 8px 242px; }
+  .why b { font-weight:600; color:var(--warn); }
+  .alts { color:var(--muted); font-size:13px; padding:0 0 6px 242px; }
   .empty { color:var(--muted); padding:40px 0; }
 </style>
 <header>
@@ -33,6 +36,15 @@
           <span class="val {{ 'unresolved' if field.status != 'auto' }}">{{ field.value or '—' }}</span>
           <span class="num">{{ '%.2f'|format(field.confidence) }}</span>
         </div>
+        {% if field.status != 'auto' and field.evidence.text %}
+          <div class="why"><b>Why flagged:</b> {{ field.evidence.text }}
+            {% if field.evidence.source_list %}<i>({{ field.evidence.source_list }})</i>{% endif %}</div>
+          {% if field.alternatives %}
+            <div class="alts">Alternative:
+              {% for alt in field.alternatives %}{{ alt.value }} ({{ '%.2f'|format(alt.confidence) }}){% endfor %}
+            </div>
+          {% endif %}
+        {% endif %}
       {% endfor %}
     </article>
   {% else %}
