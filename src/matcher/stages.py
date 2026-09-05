@@ -882,6 +882,13 @@ def counterparty_transtype(row: Row, lists: ReferenceLists) -> Field:
             if equity
             else "the bank text describes a loan rather than equity"
         )
+    elif kind == "Internal" and "INTERNAL FX TRANSFER" in narrative:
+        # A transfer between the fund's own accounts in two currencies is a conversion,
+        # and the correcting entry is booked on the credit side of it whichever way the
+        # money moved on this particular statement -- the other leg is the debit.
+        value = "Currency Correcting Credit"
+        alternative = "Currency Correcting Debit"
+        reason = "an internal transfer between two currencies, corrected on the credit side"
     elif kind == "Internal" and not incoming and "INTERNAL TRANSFER" in narrative:
         # The Process sheet parks a plain internal transfer out rather than booking it.
         value = "Suspense (debit)"

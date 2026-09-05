@@ -253,6 +253,18 @@ def test_counterparty_transtype_follows_the_kind_and_the_direction() -> None:
     assert result.alternatives, "the reviewer is given the other side to pick from"
 
 
+def test_an_fx_transfer_is_corrected_on_the_credit_side_either_way() -> None:
+    """A transfer between the fund's own accounts in two currencies is a conversion, and
+    the correcting entry sits on the credit side whichever way this statement shows it."""
+    for overrides in ({}, {"credit": 5000.0, "debit": None}):
+        row = a_row(narrative_raw="LU HBEU 240-149813-131, INTERNAL FX TRANSFER TO COVER INVOICES",
+                    **overrides)
+        for name in ("pulled_out_sender_beneficiary", "matched_sender_beneficiary",
+                     "classification"):
+            row.fields[name] = dict(stages.REGISTRY)[name](row, LISTS)
+        assert stages.counterparty_transtype(row, LISTS).value == "Currency Correcting Credit"
+
+
 def test_a_suspense_row_goes_to_a_reviewer_however_clear_the_rule_is() -> None:
     """`Suspense` is not an answer. It is the Process sheet parking a row for somebody
     to investigate, so it never books through unseen."""
