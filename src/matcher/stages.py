@@ -450,6 +450,56 @@ def _first_phrase(
     return None
 
 
+def _classify_an_unknown_name(
+    name: str, lists: ReferenceLists, pulled: Field
+) -> Field | None:
+    """What can still be said about a counterparty none of the lists names.
+
+    Two things, and only for a name that reads like an organisation -- the fee lines the
+    bank writes against itself (`COMMISSION EUR 6`, `CHARGES FOR 2`) reach here too, and
+    neither of these applies to them.
+
+    A name opening with the group's own domain code belongs to the group, whether or not
+    that particular entity has been added to a sheet yet. Otherwise a name carrying a
+    legal form is a real company that the reference data does not know, and nothing about
+    the payment can be settled from a company nobody can identify -- so it is flagged,
+    using the client's own word for that.
+    """
+    words = name.split()
+    domain = lists.domain_code
+    if domain and words and words[0].upper() == domain.upper():
+        return Field(
+            value="Related Party",
+            confidence=0.7,
+            status="needs_review",
+            evidence=Evidence(
+                span=pulled.evidence.span,
+                text=(
+                    f"{name!r} is one of the group's own entities, but it is not on the "
+                    "related party list"
+                ),
+                source_list="Related Party Master",
+            ),
+            alternatives=[Alternative(value="Other", confidence=0.2)],
+        )
+
+    if any(counterparty._looks_like_legal_form(word) for word in words):
+        return Field(
+            value="Review",
+            confidence=0.6,
+            status="needs_review",
+            evidence=Evidence(
+                span=pulled.evidence.span,
+                text=(
+                    f"{name!r} is a company, and it is on none of the reference lists, so "
+                    "we cannot say what kind of transaction this is"
+                ),
+                source_list="Related Party, Legal Entity, Investor and Vendor lists",
+            ),
+        )
+    return None
+
+
 def classification(row: Row, lists: ReferenceLists) -> Field:
     """Stage 4. What kind of transaction this is.
 
@@ -498,6 +548,15 @@ def classification(row: Row, lists: ReferenceLists) -> Field:
         )
 
     narrative = row.raw.narrative_raw
+    unidentified = row.fields.get("pulled_out_sender_beneficiary")
+    read_but_unknown = (
+        unidentified.value if unidentified and unidentified.value and not source else ""
+    )
+    if read_but_unknown:
+        settled = _classify_an_unknown_name(read_but_unknown, lists, unidentified)
+        if settled:
+            return settled
+
     found = _first_phrase(narrative, NARRATIVE_RULES)
     if found:
         phrase, value, reason = found

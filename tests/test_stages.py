@@ -157,7 +157,7 @@ def test_classification_reads_the_list_the_counterparty_matched_against() -> Non
 def test_classification_asks_rather_than_guessing_the_majority_value() -> None:
     """`Other` is the most common answer on 32 of 100 rows, so returning it whenever we
     cannot tell would score well and lie to the reviewer about how it got there."""
-    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
+    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
     row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
     result = stages.classification(row, LISTS)
@@ -173,6 +173,39 @@ def test_classification_reads_what_the_bank_says_the_payment_was_for() -> None:
     assert result.value == "Other" and result.status == "auto"
     start, end = result.evidence.span
     assert row.raw.narrative_raw[start:end] == "CHARGES FOR"
+
+
+def test_a_company_on_none_of_the_lists_is_flagged_rather_than_described() -> None:
+    """The reference data does not know this company, so nothing about the payment can be
+    settled from it -- and the narrative saying `LOAN:` describes the payment, not the
+    counterparty. `Review` is the client's own word for a row a person has to take."""
+    row = a_row(narrative_raw="COVBURY ENERGI A/S, TFR+ LOAN: FROM NI V SCSP")
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
+    row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
+    result = stages.classification(row, LISTS)
+    assert result.value == "Review" and result.status == "needs_review"
+
+
+def test_the_groups_own_domain_code_marks_a_related_party() -> None:
+    """`Legal Entity Domain` is the client's code for the group, and every related party
+    in the workbook carries it. A counterparty opening with that code is one of theirs,
+    whether or not it has been added to a sheet yet."""
+    lists = ReferenceLists(related_parties=["NIP P/S"], domain_code="NIP")
+    row = a_row(narrative_raw="NIP LIT, 55633BC44JQ0, /DK0441919414619452 RI00034")
+    for name in ("pulled_out_sender_beneficiary", "matched_sender_beneficiary"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    result = stages.classification(row, lists)
+    assert result.value == "Related Party" and result.status == "needs_review"
+
+
+def test_a_fee_line_is_not_mistaken_for_an_unknown_company() -> None:
+    """The bank's own fee lines reach the same branch -- `CHARGES FOR 2` is a name that
+    matches nothing either. Neither unknown-name rule may claim them."""
+    row = a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT")
+    lists = ReferenceLists(domain_code="NIP")
+    for name in ("pulled_out_sender_beneficiary", "matched_sender_beneficiary"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, lists)
+    assert stages.classification(row, lists).value == "Other"
 
 
 def test_a_waived_charge_does_not_outrank_knowing_who_was_paid() -> None:
@@ -232,7 +265,7 @@ def test_a_suspense_row_goes_to_a_reviewer_however_clear_the_rule_is() -> None:
 
 def test_counterparty_transtype_inherits_the_doubt_of_the_stage_before_it() -> None:
     """The Process sheet's own rule: each value is only as good as the stage before it."""
-    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
+    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
     row.fields["matched_sender_beneficiary"] = stages.matched_sender_beneficiary(row, LISTS)
     row.fields["classification"] = stages.classification(row, LISTS)
@@ -349,7 +382,7 @@ def test_positions_that_fit_equally_well_go_to_a_reviewer_together() -> None:
 
 
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
-    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
+    row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
     result = stages.matched_sender_beneficiary(row, LISTS)
     assert result.value is None and result.status == "unresolved"

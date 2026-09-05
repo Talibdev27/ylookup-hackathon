@@ -14,6 +14,7 @@ and a renamed sheet broke matching in a place with no mention of sheets at all.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 
@@ -32,6 +33,13 @@ class ReferenceLists:
     project_codes: list[dict[str, str]] = field(default_factory=list)
     deals: list[dict[str, str]] = field(default_factory=list)
 
+    #: The client's own code for the group these entities belong to, read from the
+    #: `Legal Entity Domain` column the reference sheets all carry. Every one of the 297
+    #: related parties in the sample workbook is `NIP`, which is what makes it useful: a
+    #: counterparty the lists do not name, but whose name opens with this code, is still
+    #: one of the group's own.
+    domain_code: str = ""
+
     # The sheets a workbook must carry, and the column each list is read from.
     SHEETS = {
         "legal_entities": ("Legal Entity Master List", "Legal Entity"),
@@ -49,7 +57,14 @@ class ReferenceLists:
             sheet, column = cls.SHEETS[key]
             return sorted({r[column] for r in sheets.get(sheet, []) if r.get(column)})
 
+        domains = Counter(
+            (row.get("Legal Entity Domain") or "").strip()
+            for row in sheets.get("Related Party Master", [])
+        )
+        domains.pop("", None)
+
         return cls(
+            domain_code=domains.most_common(1)[0][0] if domains else "",
             legal_entities=names("legal_entities"),
             related_parties=names("related_parties"),
             investors=names("investors"),
