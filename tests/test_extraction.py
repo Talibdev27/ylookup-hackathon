@@ -6,6 +6,7 @@ Run:  python -m pytest tests/ -q      (or: python tests/test_extraction.py)
 """
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -26,6 +27,21 @@ def test_extract_reads_every_page_of_a_real_statement() -> None:
     assert "Statement details" in document.text
     # Every page of a bank statement carries its transaction table.
     assert all(page.tables for page in document.pages)
+
+
+def test_to_json_round_trips_a_real_statement() -> None:
+    one_statement = next(iter(sorted(STATEMENTS.glob("*.pdf"))))
+    document = pdf_text.extract(one_statement)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        destination = Path(tmp) / "extracted.json"
+        pdf_text.to_json(document, destination)
+
+        loaded = json.loads(destination.read_text())
+        assert loaded["source"] == one_statement.name
+        assert len(loaded["pages"]) == len(document.pages)
+        assert loaded["pages"][0]["text"] == document.pages[0].text
+        assert loaded["pages"][0]["tables"] == document.pages[0].tables
 
 
 def test_write_workbook_round_trips() -> None:
@@ -56,6 +72,7 @@ def test_write_workbook_skips_empty_sheets_without_crashing() -> None:
 
 if __name__ == "__main__":
     test_extract_reads_every_page_of_a_real_statement()
+    test_to_json_round_trips_a_real_statement()
     test_write_workbook_round_trips()
     test_write_workbook_skips_empty_sheets_without_crashing()
     print("all extraction checks pass")
