@@ -107,11 +107,13 @@
       Showing the sample dataset. <a href="/upload">Load your own statements</a> to work on real ones.
     </p>
   {% endif %}
+  {% if has_data %}
   <p class="lede">
     These are the payments where the answer was not clear-cut. Everything else has been
     filled in already. For each one below, either accept what we suggest or pick the
     alternative.
   </p>
+  {% endif %}
 
   {% for item in queue %}
     {% set row = item.row %}
@@ -201,10 +203,19 @@
       {% endfor %}
     </article>
   {% else %}
-    <div class="empty">
-      <strong>Nothing left to check.</strong>
-      Every transaction has either been filled in automatically or reviewed by you.
-    </div>
+    {% if has_data %}
+      <div class="empty">
+        <strong>Nothing left to check.</strong>
+        Every transaction has either been filled in automatically or reviewed by you.
+      </div>
+    {% else %}
+      <div class="empty">
+        <strong>No statements loaded yet.</strong>
+        <a href="/upload">Upload this week's bank statements</a> and we will work through
+        them: who each payment was to or from, which project it belongs to, and how it
+        should be booked.
+      </div>
+    {% endif %}
   {% endfor %}
   <datalist id="counterparties">
     {% for name in suggestions %}<option value="{{ name }}">{% endfor %}

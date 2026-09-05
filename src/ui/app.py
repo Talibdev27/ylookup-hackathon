@@ -118,6 +118,10 @@ def index():
         confident=len(rows) - needs_review,
         space=workspace.current(),
         suggestions=counterparty_suggestions(),
+        # No rows at all is not the same as everything reviewed. On a fresh deployment
+        # the difference is the whole first impression: one says the product has nothing
+        # to do, the other says it is waiting for your statements.
+        has_data=bool(rows),
     )
 
 
