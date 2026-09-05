@@ -6,7 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.matcher.counterparty import complete, extract, fold, match, tidy
+from src.matcher.counterparty import (
+    complete, drop_address, extract, fold, locate, match, tidy,
+)
 
 NARRATIVE = (
     "NI ABF II MIZARCO S.A R., PAYMENT FROM NORDVIK INFRASTRUCTURE ABF II SCSP, "
@@ -22,10 +24,11 @@ def test_fold_bridges_the_two_spellings() -> None:
 
 def test_extract_takes_the_first_name_fragment() -> None:
     fragment, span = extract(NARRATIVE)
-    assert fragment == "NI ABF II MIZARCO S.A R"
-    # The span covers the name as the bank wrote it, trailing punctuation included --
-    # it is what gets highlighted on screen, so it must match the text on the page.
-    assert NARRATIVE[span[0] : span[1]].startswith(fragment)
+    # The stop closing `S.A R.` is part of the name, not punctuation around it, so it
+    # survives -- the human transcribing these keeps whichever form the bank wrote.
+    assert fragment == "NI ABF II MIZARCO S.A R."
+    # The span is what gets highlighted on screen, so it must be the text on the page.
+    assert NARRATIVE[span[0] : span[1]] == fragment
 
 
 def test_extract_skips_reference_fragments() -> None:
@@ -38,17 +41,50 @@ def test_tidy_strips_the_line_number_prefix() -> None:
     assert tidy("1/NORDVIK INFRASTRUCTURE PARTNER") == "NORDVIK INFRASTRUCTURE PARTNER"
 
 
-def test_complete_extends_only_across_whole_fragments() -> None:
-    """Completion is deliberately limited to whole comma-fragments. Looser versions that
-    scanned word windows scored 17/55 and 7/55 on the human's names, against 37/55 for
-    this one -- they over-extend far more often than they rescue a truncation.
+def test_complete_reads_a_full_spelling_out_of_the_middle_of_a_fragment() -> None:
+    """The bank cut this name at a line break and spelled it out later, mid-fragment,
+    where no fragment scan can see it. Reading from the later mention to the end of the
+    name recovers it.
 
-    Here the full form only appears mid-fragment, so the truncated name stands."""
-    assert complete("NI ABF II MIZARCO S.A R.", NARRATIVE) == "NI ABF II MIZARCO S.A R"
+    An unguarded word window was measured at 17/55 and 7/55 against 37/55 for whole
+    fragments only, which is why the two guards matter: a completion stops at the bank's
+    own instruction words, and has to add name rather than punctuation."""
+    assert complete("NI ABF II MIZARCO S.A R.", NARRATIVE) == "NI ABF II MIZARCO S.A R.L."
     # When the fuller form is its own fragment, it is picked up.
     assert complete("TRENTBECK AUDIT", "TRENTBECK AUDIT, TRENTBECK AUDIT LUXEMBOURG") == (
         "TRENTBECK AUDIT LUXEMBOURG"
     )
+
+
+def test_completion_must_add_name_not_punctuation() -> None:
+    """The same counterparty is written `... U.A` in one place and `... U.A.` in another.
+    Neither is more complete, so a later mention that folds identically is not a
+    completion and the fragment the bank led with stands."""
+    narrative = "NI GMF II COOPERATIEF U.A, 93301QH142TF, NI GMF II COOPERATIEF U.A. PROJECT IAPETUS."
+    assert complete("NI GMF II COOPERATIEF U.A", narrative) == "NI GMF II COOPERATIEF U.A"
+
+
+def test_completion_stops_where_the_name_stops() -> None:
+    """The bank runs a name straight into why it paid, with no punctuation between."""
+    narrative = "NI RANFJORD II SCSP, 25515MS49ERZ, TO NI RANFJORD II SCSP (EUR). PROJECT, RANFJORD II."
+    assert complete("NI RANFJORD II SCSP", narrative) == "NI RANFJORD II SCSP"
+
+
+def test_a_street_address_is_not_part_of_the_company_name() -> None:
+    """`COVBURY ENERGI A/S FENNSTEAD 41` is a company and an address run together. The
+    name closes at its legal form; the house number is what marks the rest as an address,
+    because `NI ABF II MIZARCO S.A R.L.` also continues past one."""
+    assert drop_address("COVBURY ENERGI A/S FENNSTEAD 41") == "COVBURY ENERGI A/S"
+    assert drop_address("NI ABF II MIZARCO S.A R.L.") == "NI ABF II MIZARCO S.A R.L."
+
+
+def test_a_name_is_read_back_off_the_page_with_its_line_wrap() -> None:
+    """A name read off a whitespace-collapsed copy has lost the comma the bank wrapped
+    into it. Both the value and the highlighted span have to be the page's own text."""
+    narrative = "SHORT TERM LOAN: FROM NORDVIK, INFRASTRUCTURE V SCSP TO NORDVIK, INFRASTRUCTURE V CN SCSP."
+    text, span = locate("NORDVIK INFRASTRUCTURE V CN SCSP", narrative)
+    assert text == "NORDVIK, INFRASTRUCTURE V CN SCSP"
+    assert narrative[span[0] : span[1]] == text
 
 
 def test_currency_decides_between_two_spellings_of_one_counterparty() -> None:

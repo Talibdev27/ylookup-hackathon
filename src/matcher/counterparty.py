@@ -52,8 +52,55 @@ LINE_PREFIX = re.compile(r"^\d+\s*/\s*")
 
 
 def tidy(fragment: str) -> str:
-    """Strip the bank's line-number prefix and trailing punctuation left by a line break."""
-    return LINE_PREFIX.sub("", fragment).strip().strip(".,;:-").strip()
+    """Strip the bank's line-number prefix and the punctuation a line break left behind.
+
+    A trailing full stop survives, because it is usually part of the name rather than
+    punctuation around it: the bank writes `NI V KALVIK TOPCO LTD.` and
+    `NI GMF II COOPERATIEF U.A.`, where the stop closes the abbreviation. The human doing
+    this by hand transcribes whichever form the bank wrote -- the same counterparty is
+    recorded `... U.A.` on one row and `... U.A` on another, following the statement each
+    time -- so removing it loses information rather than tidying it away.
+
+    A run of stops is the abbreviation's own plus the sentence's, and collapses to one.
+    Nothing downstream is affected either way: `fold` drops punctuation before comparing.
+    """
+    text = LINE_PREFIX.sub("", fragment).strip().strip(",;:-").strip()
+    text = text.lstrip(".").strip()
+    return re.sub(r"\.{2,}$", ".", text)
+
+
+# Legal forms, as the token that closes a company's name. Written without their dots and
+# accents, which is how `_looks_like_legal_form` compares them.
+LEGAL_FORM_TOKENS = {
+    "A/S", "K/S", "P/S", "APS", "SCSP", "SCS", "SCA", "LTD", "LIMITED", "GMBH", "INC",
+    "LLC", "BV", "NV", "SARL", "SRL", "RL", "SA", "AB", "AS", "OY", "PLC", "CV", "LP",
+    "UA", "GP",
+}
+
+
+def _looks_like_legal_form(word: str) -> bool:
+    decomposed = unicodedata.normalize("NFKD", word)
+    ascii_only = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return ascii_only.replace(".", "").replace(",", "").upper() in LEGAL_FORM_TOKENS
+
+
+def drop_address(name: str) -> str:
+    """Cut the street address the bank prints after a counterparty's name.
+
+    `COVBURY ENERGI A/S FENNSTEAD 41` is one company and one address run together with
+    nothing between them. A company's name closes at its legal form, so anything after
+    that belongs to the address -- but only when it carries a house number, because
+    `NI ABF II MIZARCO S.A R.L.` also continues past a legal form and there the
+    continuation is the rest of the name.
+    """
+    words = name.split()
+    for index, word in enumerate(words[:-1]):
+        if not _looks_like_legal_form(word):
+            continue
+        rest = words[index + 1 :]
+        if any(ch.isdigit() for word in rest for ch in word):
+            return " ".join(words[: index + 1])
+    return name
 
 
 def _is_reference(fragment: str) -> bool:
@@ -93,6 +140,7 @@ def extract(narrative: str) -> tuple[str, tuple[int, int]] | None:
         # The first qualifying fragment wins outright -- the bank leads with the
         # counterparty. Scoring only decides whether a fragment qualifies at all.
         offset = fragment.index(stripped)
+        stripped = drop_address(stripped)
         best = (score, stripped, start + offset, start + offset + len(stripped))
         break
     if best is None:
@@ -101,12 +149,29 @@ def extract(narrative: str) -> tuple[str, tuple[int, int]] | None:
     return text, (start, end)
 
 
+def _read_name(text: str) -> str:
+    """Read a name off the front of `text` and stop where the name stops.
+
+    The bank runs straight from the counterparty into why it paid them --
+    `NI RANFJORD II SCSP (EUR). PROJECT, RANFJORD II.` -- with no punctuation to separate
+    the two. A name ends at the first word that belongs to the sentence rather than to
+    the company: one of the bank's own instruction words, or a parenthesis, which is
+    where it puts the currency and the security type.
+    """
+    words: list[str] = []
+    for word in text.split():
+        if word.startswith("(") or fold(word) in NOISE_WORDS:
+            break
+        words.append(word)
+    return drop_address(tidy(" ".join(words)))
+
+
 def complete(fragment: str, narrative: str) -> str:
     """Recover a name the bank truncated, when a longer comma-fragment spells it out.
 
-    Only whole fragments are considered, and this is a deliberate limit rather than an
-    oversight. Two looser versions were measured against the 55 names the human pulled
-    by hand:
+    Whole fragments are tried first, then the middle of a fragment. The second pass used
+    to be absent, and its absence was deliberate -- two unguarded versions were measured
+    against the 55 names the human pulled by hand and both lost badly:
 
       whole fragments only          37 / 55
       any word window               17 / 55   (over-extends: every longer window still
@@ -114,9 +179,12 @@ def complete(fragment: str, narrative: str) -> str:
       word windows stopped at a
       noise word                     7 / 55   (worse again -- stops in the wrong places)
 
-    So `NI ABF II MIZARCO S.A R.` stays truncated when its full form only appears
-    mid-fragment. Three rows lose their completion; twenty rows keep a correct name.
-    That trade is why the loose versions are not here.
+    What makes the second pass safe now is two guards those versions did not have. A
+    completion stops where the name stops rather than at the next comma (`_read_name`),
+    and it has to add name rather than punctuation, so a later mention that folds
+    identically to the fragment is not mistaken for a fuller spelling of it. With both,
+    the middle-of-fragment pass rescues `NI ABF II MIZARCO S.A R.L.` and costs nothing.
+    Remove either guard and the numbers above come straight back.
     """
     fragment = tidy(fragment)
     folded = fold(fragment)
@@ -124,9 +192,41 @@ def complete(fragment: str, narrative: str) -> str:
         return fragment
     longest = fragment
     for candidate in re.split(r"[,;]", narrative):
-        candidate = tidy(candidate)
-        if len(candidate) > len(longest) and fold(candidate).startswith(folded):
+        # Compare what is left once the reason for the payment is dropped, so a later
+        # mention of the same name followed by `PROJECT IAPETUS` is not mistaken for a
+        # longer spelling of it.
+        candidate = drop_address(strip_clause(candidate))
+        if not fold(candidate).startswith(folded) or len(candidate) <= len(longest):
+            continue
+        # A completion has to add name, not punctuation. The bank writes this counterparty
+        # `... U.A` on one row and `... U.A.` on the next; neither is more complete than
+        # the other, and swapping one for the other is churn dressed up as a fix.
+        if fold(candidate) == folded:
+            continue
+        longest = candidate
+    if longest != fragment:
+        return longest
+
+    # The full spelling can sit inside a fragment rather than starting one:
+    #
+    #   NI ABF II MIZARCO S.A R., PAYMENT FROM ..., TO TO NI ABF II MIZARCO S.A R.L. PROJECT
+    #   ^ the bank ran out of line here            ^ and spelled it out here, mid-fragment
+    #
+    # No fragment begins with the truncated name, so the scan above cannot see it. Read
+    # instead from each later mention of the name to the end of that mention. The same
+    # two guards apply, and they are what keeps this from over-reaching the way a plain
+    # word window does -- the measured history of that is in this function's docstring.
+    haystack, needle = narrative.upper(), fragment.upper()
+    found = haystack.find(needle)
+    while found != -1:
+        candidate = _read_name(narrative[found:].split(",")[0])
+        if (
+            len(candidate) > len(longest)
+            and fold(candidate).startswith(folded)
+            and fold(candidate) != folded
+        ):
             longest = candidate
+        found = haystack.find(needle, found + 1)
     return longest
 
 
@@ -158,6 +258,22 @@ def fold_legal_form(text: str) -> str:
     return " ".join(LEGAL_FORMS.get(word, word) for word in fold(text).split())
 
 
+def locate(name: str, narrative: str) -> tuple[str, tuple[int, int]] | None:
+    """Find a name in the raw narrative and return it exactly as the bank wrote it.
+
+    A name read off a whitespace-collapsed copy of the text has lost the line wrap the
+    bank put inside it -- `NORDVIK, INFRASTRUCTURE V CN SCSP` comes back as
+    `NORDVIK  INFRASTRUCTURE V CN SCSP`. Both the value the reviewer reads and the span
+    the screen highlights have to be the statement's own characters, so the words are
+    matched back against the raw text with the wrap allowed between them.
+    """
+    if not name.split():
+        return None
+    pattern = r"[,\s]+".join(re.escape(word) for word in name.split())
+    found = re.search(pattern, narrative, re.IGNORECASE)
+    return (found.group(0), found.span()) if found else None
+
+
 def other_party(narrative: str, own_names: list[str]) -> tuple[str, tuple[int, int]] | None:
     """The side of a `FROM ... TO ...` sentence that is not this account.
 
@@ -178,8 +294,7 @@ def other_party(narrative: str, own_names: list[str]) -> tuple[str, tuple[int, i
         name = strip_clause(side)
         if not name or fold_legal_form(name) in mine:
             continue
-        start = narrative.upper().find(name)
-        return name, ((start, start + len(name)) if start >= 0 else None)
+        return locate(name, narrative) or (name, None)
     return None
 
 
