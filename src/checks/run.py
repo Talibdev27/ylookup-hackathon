@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable
 
-from src.checks import footing
+from src.checks import currency_mismatch, duplicates, footing, round_numbers
 from src.checks.contract import Flag
 from src.contract import Row
 
@@ -19,6 +19,9 @@ Check = Callable[[list[Row]], list[Flag]]
 
 REGISTRY: list[tuple[str, Check]] = [
     ("balance_continuity", footing.check),
+    ("duplicate_transaction", duplicates.check),
+    ("round_number_amount", round_numbers.check),
+    ("currency_mismatch", currency_mismatch.check),
 ]
 
 

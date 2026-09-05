@@ -46,24 +46,28 @@ in the reference workbook, real posted journal lines, not a new document type at
 `docs/ARCHITECTURE.md` §5a. Cash flow has no equivalent shortcut: the data has nothing that
 maps to operating/investing/financing activities, so it stays open.
 
-Dataset 02 (investor-level GL → loader) remains real, present, and untouched by any code
-here — 34,000 source rows across 43 columns, four crosswalks, and a 19,000-row output —
-the gradeable target if a genuinely new document type is wanted rather than a rollup of
-data already on hand.
+**Built**: `src/gl_migration/`, exposed at `GET /api/gl-migration/flags` — the first code
+against dataset 02, 34,000 source rows across 43 columns, reproducing its four known
+gaps as real flags (verified counts: 4 legal entities, 16 deals, 198 investors, 2 mapping
+gaps) plus a new check confirming every one of the 52 legal entities common to both files
+ties to the cent after mapping. See `docs/analyst-flags.md` §3. Still open: `Movements
+Rec`, the administrator's own pre-upload reconciliation sheet, isn't read yet.
 
 ## More checks
 
-`src/checks/` runs after extraction over already-structured records, asking *does this add
-up?* rather than *what is this?* — a different job from the matcher. `footing.py` is the
-first: balance continuity, one `Flag` per row where a statement's running balance does not
-follow from the row before it in the same account. The check is now part of the normal
-pipeline: its execution status and findings are persisted, shown in the unified review
-queue, available through the frontend JSON API, and included in the reviewed export.
+`src/checks/` runs after extraction over already-structured records, asking *does this
+add up?* rather than *what is this?* — a different job from the matcher. Six checks now,
+up from the one (`footing.py`) this section originally described — see
+`docs/analyst-flags.md` for every one of them with its real finding, verified against the
+data rather than assumed. Each is part of the normal pipeline: execution status and
+findings are persisted, shown in the unified review queue, available through the
+frontend JSON API, and included in the reviewed export.
 
-It currently finds nothing on the sample data, which is the correct answer — those
-statements do foot. Future checks worth adding are the ones that would have caught the
-interview's complaints: a subsequent event whose date was rolled forward rather than moved,
-and a side-letter fee calculation that does not tie.
+Genuinely still open, the ones that would have caught the interview's complaints
+directly: a subsequent event whose date was rolled forward rather than moved, a
+side-letter fee calculation that does not tie, and Suspense postings left unresolved
+(blocked on checks currently running before matching, not after — see
+`docs/analyst-flags.md` §1).
 
 "A balance sheet with no bridge to the equity balance," listed here originally, is now
 partly answered: `src/reports/statements.py`'s `ties()` checks the expanded accounting

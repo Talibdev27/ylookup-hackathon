@@ -1,54 +1,61 @@
 # What an analyst would flag
 
-Ideation only — nothing below is implemented beyond what is explicitly marked *(built)*.
-The point is to have a real list, grounded in the actual data, ready for whoever picks up
-`src/checks/` next. See `docs/ROADMAP.md` for the checking-agent shape these would take.
+Started as ideation; most of it is built now. Anything not marked *(built)* is still
+open. See `docs/ARCHITECTURE.md` §9 for how a check plugs in, and
+`docs/backend-integration.md` for the two API surfaces these come out through
+(`/api/review` for dataset 1, `/api/gl-migration/flags` for dataset 2).
 
-## 1 · Bank statement transactions (dataset 1 — the one thing built end to end)
+## 1 · Bank statement transactions (dataset 1)
 
-| Flag | Why an analyst cares | How it would be detected |
+| Flag | Why an analyst cares | Status |
 |---|---|---|
-| Balance does not foot | The statement's own running balance is wrong, or a transaction is missing from it | *(built)* `src/checks/footing.py` — reverses each account into chronological order, checks `balance[i] == balance[i-1] + amount[i]`. Finds nothing on the sample data; the statements foot. |
-| Documented rule vs. actual booking disagree | The client's own `Process` sheet is not what their file does — the thing the whole product argues about | *(built, as a matcher stage rather than a check)* `cash_leg_transtype` flags all 23 credit rows booked `Cash - Disbursed` against the sheet's own rule. Worth generalising into a standalone check rather than one stage's side effect — see `docs/where-the-points-go.md`. |
-| No project code resolves | 30 of 100 rows are the client's own `Flag for review — no project match`, not a gap the matcher should paper over | Reproduced as-is by `matched_project_code`; an analyst reviewing the export would want these grouped and counted, not scattered through 100 rows. |
-| Duplicate transaction | Same amount, same bank reference, same day, twice — double-booking or a bank error | Group rows by `(bank_reference, credit/debit amount, value_date, account_number)`; more than one row in a group is worth a human's eyes even if every field matched cleanly. |
-| Round-number transaction | A suspiciously exact amount (`20,000.00`, `100,000.00`) often means an estimate or a manual entry rather than an invoiced figure | Amount modulo a threshold (e.g. divisible by 1,000 with no cents) — a standard audit heuristic, cheap to compute, worth a low-severity flag rather than a hard stop. |
-| Posting to Suspense left unresolved | The Process sheet uses Suspense as a parking space for a human to investigate — an *aged* suspense balance is a classic audit finding | Any row where `counterparty_transtype` resolves to `Suspense (credit)` / `Suspense (debit)` and no reviewer decision exists in `data/decisions.json`. |
-| Currency does not match the entity's usual currency | A handful of legal entities are held in more than one currency (`NI GMF II Coöperatief U.A.` vs `... - USD`); a transaction in an unexpected currency for that entity is worth a second look | Cross-reference `row.raw.currency` against which currency-suffixed variant of the entity actually matched. |
-| Related-party transaction with nothing explaining it | `classification = Related Party` with no narrative text saying why is already the weakest kind of proposal the matcher makes | *(partially built)* `classification` already sends this case to `needs_review`; an analyst-facing summary would want these counted as their own category, since related-party dealings carry disclosure risk on their own. |
+| Balance does not foot | The statement's own running balance is wrong, or a transaction is missing from it | *(built)* `src/checks/footing.py`. Finds nothing on the sample data — the statements foot. |
+| Documented rule vs. actual booking disagree | The client's own `Process` sheet is not what their file does | *(built, as a matcher stage)* `cash_leg_transtype` flags all 23 credit rows booked `Cash - Disbursed` against the sheet's own rule. Still not a standalone check — see `docs/where-the-points-go.md`. |
+| No project code resolves | 30 of 100 rows are the client's own `Flag for review — no project match` | *(built)* Reproduced as-is by `matched_project_code`. |
+| Duplicate transaction | Same bank reference, amount, date and account twice — double-booking or a bank error | *(built)* `src/checks/duplicates.py`. **0 flags on the sample** — several bank references do repeat (a wire and its fee, an internal transfer's two legs), but none also share the same signed amount, a real negative, not an unexercised rule. |
+| Round-number transaction | A suspiciously exact amount often means an estimate rather than an invoiced figure | *(built)* `src/checks/round_numbers.py`. **24 flags** — threshold (≥3 trailing zeros) chosen from a real gap in the sample's own trailing-zero distribution, not picked to hit a target count. `severity="info"`, not an error. |
+| Currency does not match the account's usual one | A transaction in an unexpected currency for an account is worth a second look | *(built)* `src/checks/currency_mismatch.py`. **0 flags** — every account in the sample is single-currency across every row, a real negative. |
+| Posting to Suspense left unresolved | Suspense is a parking space for a human to investigate; an aged balance is a classic audit finding | Still open. Needs the row's `counterparty_transtype` value, which only exists after matching — the checking agent currently runs *before* matching (`pipeline.py`), so this needs a second, post-match check pass, not just a new module. |
+| Related-party transaction with nothing explaining it | `classification = Related Party` with no narrative saying why is the weakest kind of proposal the matcher makes | *(partially built)* `classification` already sends this to `needs_review`. Not pulled out as its own count. |
 
-## 2 · The reference / master lists (the workbook's other 14 sheets)
+## 2 · Reference data and journal entries (dataset 1)
 
-| Flag | Why an analyst cares | How it would be detected |
+| Flag | Why an analyst cares | Status |
 |---|---|---|
-| Same entity listed more than once, spelled differently | A data-entry inconsistency in the client's own master list, not something the matcher should have to work around forever | Fold every entry in a list (`counterparty.fold()` already does this) and look for two different raw spellings folding to the same value. |
-| Posting to an inactive account | `CoA` carries `Account Active or Inactive` — a transaction booked to an account marked inactive is a control failure | Join a posted `Account`/`GL Account Code` against `CoA`'s active flag. |
-| Master-list entry never referenced by anything | A legal entity, vendor or project code that exists in a list but never appears in a transaction, a deal, or a mapping — dead data, or a sign something upstream never got wired up | Anti-join: entries in a master list with zero matches across the transaction data. |
-| Ambiguous currency-suffixed duplicates | Two master entries differing only by a trailing `- USD` / `- EUR` are the same legal entity in two currencies, not two entities — worth confirming rather than assuming | Already handled defensively in `counterparty.match()`'s scoring; worth a standing data-quality flag on the master list itself so it gets cleaned up rather than compensated for indefinitely. |
+| Same entity listed twice, spelled differently | A data-entry inconsistency in the client's own master list | *(built)* `src/checks/reference_quality.py`, run against the 97-row Legal Entity Master List. **0 exact-fold collisions.** 11 candidate near-duplicate pairs at a 0.9 token-overlap threshold, manually reviewed — none are real duplicates, each differs by one meaningful word (`NON`, `ELIMINATION`/`ELIMINATIONS`, `BLOCKED`) marking a genuinely distinct fund vehicle. Flagged `severity="review"` precisely because they're worth a glance, not because they're wrong. |
+| Posting to an inactive account | A transaction booked to an account marked inactive in `CoA` is a control failure | *(built)* `src/checks/journal_integrity.py`. **0 flags** — all 558 CoA accounts are `Active`; there is no inactive account in this dataset to catch a posting to. |
+| Batch does not balance | Double-entry's one hard rule | *(built)* `src/checks/journal_integrity.py`. **0 flags** — all 100 batches balance to the cent. |
+| A batch has only one line | Every real batch here is two lines | *(built)* same module. **0 flags** — all 100 batches are exactly two lines. |
+| The two lines of a pair don't share their join key | The pair is supposed to share `Transaction Reference` | *(built)* same module. **0 flags** — every pair matches. |
+| Master-list entry never referenced by anything | Dead data, or a sign something upstream never got wired up | Still open — an anti-join across every reference list against every transaction, not built. |
 
-## 3 · Journal entries (`DIU`, the finished output)
+Every "0 flags" above was verified by hand before being written down, not assumed —
+`tests/test_journal_integrity.py`, `tests/test_reference_quality.py`,
+`tests/test_duplicates.py`, `tests/test_round_numbers.py` and
+`tests/test_currency_mismatch.py` each pin a synthetic broken case proving the rule
+actually fires, alongside the real-data case proving today's data is genuinely clean.
 
-| Flag | Why an analyst cares | How it would be detected |
+## 3 · Investor-level GL → loader (dataset 2)
+
+*(built)* `src/gl_migration/`, exposed at `GET /api/gl-migration/flags` — the first code
+written against this dataset. Every count re-derived from the live workbooks, not
+copied from the dataset's own README:
+
+| Flag | Count | Matches README? |
 |---|---|---|
-| Batch does not balance | Double-entry's one hard rule: every batch's debits must equal its credits | Group `DIU` lines by `Batch ID`, sum signed `Amount (Local)`, expect zero. |
-| A batch has only one line | Every real batch is two lines (per `docs/ROADMAP.md`'s Stage 6 notes) — one line means something failed to pair | Group by `Batch ID` and `JE Index`, flag any group of size 1. |
-| The two lines of a pair do not share their join key | The pair is supposed to share `Transaction Reference` (`{date}_{amount}_{ccy}`) — a mismatch means the pairing itself is wrong, not just one field on it | Compare `Transaction Reference` across both lines of a `Batch ID`. |
+| Legal entity in the upload template, missing from Entity Listing | **4** | Yes |
+| Deal name in the upload template, missing from Deals List | **16** | Yes |
+| Investor name in the mapping, missing from Investors List | **198** | Yes |
+| Gaps the administrator itself flagged before upload (`Mapping Gaps` sheet) | **2** | README gives no number for this one |
 
-## 4 · Investor-level GL → loader (dataset 2 — real data, nothing built against it yet)
+**The new check, not in the README**: does the total tie between the source GL and the
+upload template after the entity/deal/investor mapping is applied? Grouped by Legal
+Entity (the only column with directly comparable, un-remapped values on both sides) and
+verified by hand on one entity (1,522 rows each side, identical first-row amount,
+both summing to 0.00) before trusting the aggregate — **every one of the 52 legal
+entities common to both files ties to the cent.** The 27 source entities not yet in this
+tranche are correctly excluded rather than forced to tie against nothing.
 
-Already counted in the dataset's own README, reproduced here because an analyst would
-ask for exactly these as a starting checklist, not because they are new findings:
-
-| Flag | Count | Source |
-|---|---|---|
-| Legal entity in the upload template, missing from the entity listing | 4 | `README.md` of dataset 02 |
-| Deal name in the upload template, missing from the deals list | 16 | same |
-| Investor name in the mapping, missing from the investors list | 198 | same |
-| Gaps the administrator itself flagged before upload | populated `Mapping Gaps` sheet | same |
-| Items still open on the administrator's own pre-upload reconciliation | `Movements Rec` sheet | same |
-
-Beyond the counts already given: whether amounts still tie between the ~34,000-row source
-GL and the ~18,930-row upload template after the entity/deal/investor mapping is applied
-— a rollup by account that does not match before and after the transformation would be
-the single most convincing check on this dataset, in the same spirit as `footing.py` for
-statements.
+Still open on dataset 2: `Movements Rec`, the administrator's own pre-upload
+reconciliation sheet, isn't read yet — the items still open on it would be a sixth flag
+type, not yet built.

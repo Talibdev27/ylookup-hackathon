@@ -233,10 +233,34 @@ looking for something that does not add up, independent of whether any single fi
 confidence looks low. It is a different question from what the matcher asks: the matcher
 asks *"what is this?"*, a check asks *"does this reconcile?"*. `run.py` owns the check
 registry and failure isolation: one broken check is logged and recorded as failed without
-dropping extracted transactions or blocking the matcher. `footing.py` is the first check
-— balance continuity. It reverses each account's newest-first rows into chronological
-order before checking that `balance[i] == balance[i-1] + amount[i]`. It currently finds
-nothing on the bundled data, which is the correct answer — those statements foot.
+dropping extracted transactions or blocking the matcher. Six checks run today, each
+verified against the real data rather than assumed — see `docs/analyst-flags.md` for the
+finding behind every one:
+
+- `footing.py` — balance continuity. Reverses each account's newest-first rows into
+  chronological order before checking that `balance[i] == balance[i-1] + amount[i]`.
+  Finds nothing on the bundled data — those statements foot.
+- `duplicates.py` — same bank reference, signed amount, value date and account twice.
+  Finds nothing — repeated bank references never share a signed amount.
+- `round_numbers.py` — an amount with three or more trailing zeros. `severity="info"`,
+  not an error. 24 flags.
+- `currency_mismatch.py` — a row whose currency differs from its account's dominant
+  currency. Finds nothing — every sample account is single-currency.
+- `journal_integrity.py` — takes the `DIU` and `CoA` sheets directly rather than `Row`
+  objects (a batch that does not balance, a batch with only one line, a pair whose
+  `Transaction Reference` disagrees, a posting to an inactive account), so it runs
+  through `pipeline._apply_workbook_checks` rather than the `Row`-based `REGISTRY`.
+  Finds nothing — all 100 batches balance, pair correctly, and post to active accounts.
+- `reference_quality.py` — near-duplicate entries in the Legal Entity Master List, by
+  exact fold and by 0.9 token-overlap. Also workbook-sourced, also runs through
+  `_apply_workbook_checks`. 11 candidate pairs, none real duplicates on manual review
+  (`severity="review"`).
+
+`src/gl_migration/analyze()`, exposed at `GET /api/gl-migration/flags`, is a parallel
+analyzer for dataset 02 (the investor-level GL → loader workbooks) rather than a
+`src/checks/` entry — it does not share `Row`, so it has its own small package instead of
+forcing a second signature into the checking agent's registry. See `docs/ARCHITECTURE.md`
+§9 and `docs/analyst-flags.md` §3 for its five checks and their counts.
 
 The pipeline persists execution facts as well as findings, so zero flags after one
 completed check is distinguishable from a check that never ran. Findings are also
@@ -319,9 +343,15 @@ whatever the reviewer decides is what step 5 exports.
 Adding a matcher stage: one function of shape `(row, lists) -> Field` in
 `src/matcher/stages.py`, one line in `REGISTRY`. `AGENTS.md` covers this.
 
-Adding a check: one function of shape `(records) -> list[Flag]` in `src/checks/`, one
-registry entry in `src/checks/run.py`, and tests against real data both clean and
-deliberately broken — `tests/test_footing.py` is the template. See `docs/ROADMAP.md`.
+Adding a check: one function of shape `(rows: list[Row]) -> list[Flag]` in `src/checks/`,
+one registry entry in `src/checks/run.py`, and tests against real data both clean and
+deliberately broken — `tests/test_footing.py` is the template. If the check needs the
+reference workbook's own sheets rather than `Row` objects (as `journal_integrity.py` and
+`reference_quality.py` do), it does not fit `REGISTRY`'s signature — wire it into
+`pipeline._apply_workbook_checks` instead, which merges its flags into the same
+`CheckResult`. A check against a document type with no `Row` at all, like
+`src/gl_migration/` for dataset 02, gets its own small package and its own endpoint rather
+than being forced into either path. See `docs/ROADMAP.md`.
 
 Adding a second PDF-sourced document type: a new parser over `src/extraction/pdf_text.py`,
 mirroring what `spine/pdf.py` does for statements, producing records that `src/checks/` can

@@ -26,16 +26,29 @@ def test_running_the_sample_workspace() -> None:
     assert not result.unwritten, "every column has a stage now; a name here is a regression"
     assert result.stages_applied == result.stages_total
     assert result.ok, f"stages failed: {dict(result.failures)}"
-    assert result.checks_total == 1
-    assert result.checks_applied == ["balance_continuity"]
-    assert not result.check_failures and result.flags_found == 0
+    assert result.checks_total == 6
+    assert result.checks_applied == [
+        "balance_continuity",
+        "duplicate_transaction",
+        "round_number_amount",
+        "currency_mismatch",
+        "journal_batch_integrity",
+        "reference_list_quality",
+    ]
+    assert not result.check_failures
+    # 24 round-number amounts + 11 near-duplicate master-list name pairs -- see
+    # tests/test_round_numbers.py and tests/test_reference_quality.py for the real-data
+    # verification behind each count. Every other check is a genuine negative: the
+    # statements foot, nothing duplicates, no currency is out of place, every batch
+    # balances and pairs correctly, and every account is active.
+    assert result.flags_found == 35
 
     rows = json.loads(pipeline.ROWS.read_text())
     assert len(rows) == 100
     assert rows[0]["raw"]["narrative_normalised"], "normalise runs before matching"
     report = json.loads(pipeline.FLAGS.read_text())
-    assert report["checks_applied"] == ["balance_continuity"]
-    assert report["flags_found"] == 0 and report["flags"] == []
+    assert report["checks_applied"] == result.checks_applied
+    assert report["flags_found"] == 35 and len(report["flags"]) == 35
 
 
 def test_a_run_invalidates_reviewer_decisions() -> None:
@@ -58,6 +71,11 @@ def test_a_run_invalidates_reviewer_decisions() -> None:
 
 
 def test_a_check_failure_keeps_the_transaction_queue() -> None:
+    """Swapping out `REGISTRY` only breaks the row-based checks it holds -- the two
+    workbook-level checks (`journal_batch_integrity`, `reference_list_quality`) run
+    through a separate path in `pipeline._apply_workbook_checks` precisely because they
+    need the reference workbook's own sheets, not `rows`, and are unaffected by this."""
+
     def exploding(rows):
         raise RuntimeError("not for a reviewer")
 
@@ -72,7 +90,7 @@ def test_a_check_failure_keeps_the_transaction_queue() -> None:
     assert not result.ok and sum(result.check_failures.values()) == 1
     assert len(json.loads(pipeline.ROWS.read_text())) == 100
     report = json.loads(pipeline.FLAGS.read_text())
-    assert report["checks_applied"] == []
+    assert report["checks_applied"] == ["journal_batch_integrity", "reference_list_quality"]
     assert sum(report["check_failures"].values()) == 1
 
 

@@ -22,6 +22,7 @@ from flask import Flask, Response, jsonify, redirect, render_template, request, 
 from werkzeug.utils import secure_filename
 
 from src import exporter, pipeline
+from src.gl_migration import analyze as gl_migration
 from src.reports import statements as report_statements
 from src.spine import workspace
 from src.ui import labels
@@ -502,6 +503,57 @@ def api_cash_flow(company_id: str):
                 "Building this needs a real mapping decision, not a rollup -- see "
                 "docs/analyst-flags.md."
             ),
+        }
+    )
+
+
+def _public_gl_migration_flag(flag) -> dict:
+    """Dataset 02's flags carry their own kind of source (`legal_entity`, `sheet`,
+    `deal_name` ...) -- nothing like a bank statement's `pdf`/`page`/`row_id`, so
+    `_safe_source`'s whitelist would silently drop all of it. Pass `source` through
+    whole; there is no server filesystem path in it to strip in the first place.
+    """
+    return {
+        "flag_id": flag.flag_id,
+        "check": flag.check,
+        "label": labels.check_label(flag.check),
+        "severity": flag.severity,
+        "severity_label": labels.severity_label(flag.severity),
+        "message": flag.message,
+        "source": flag.source,
+        "expected": flag.expected,
+        "actual": flag.actual,
+    }
+
+
+_GL_MIGRATION_CACHE: list[dict] | None = None
+
+
+@app.get("/api/gl-migration/flags")
+def api_gl_migration_flags():
+    """Dataset 02 (investor-level GL -> loader), analyzed independently of the bank
+    statement pipeline above -- a different dataset, a different shape of data (no
+    per-transaction `Row`, no reference workbook upload), so it gets its own endpoint
+    rather than being forced through `/api/review`. See `src/gl_migration/analyze.py`.
+
+    Cached at module level after the first call: the 34,000-row source GL takes a few
+    seconds to read, and this dataset does not change at runtime -- there is no upload
+    route for it in this pass, unlike the bank-statement side.
+    """
+    global _GL_MIGRATION_CACHE
+    if _GL_MIGRATION_CACHE is None:
+        try:
+            _GL_MIGRATION_CACHE = [_public_gl_migration_flag(flag) for flag in gl_migration.analyze()]
+        except FileNotFoundError as error:
+            return jsonify({"error": f"dataset 02 not found: {error}"}), 404
+    by_check: dict[str, int] = {}
+    for flag in _GL_MIGRATION_CACHE:
+        by_check[flag["check"]] = by_check.get(flag["check"], 0) + 1
+    return jsonify(
+        {
+            "flags_found": len(_GL_MIGRATION_CACHE),
+            "by_check": by_check,
+            "flags": _GL_MIGRATION_CACHE,
         }
     )
 

@@ -119,20 +119,30 @@ does, the reviewer can accept the proposal, take one of the alternatives, type a
 which clears the value rather than falling back to a proposal the person has already
 rejected.
 
-The same transaction card also carries any automated inconsistency findings. The first
-registered check verifies running-balance continuity. Each finding has a stable ID, severity,
-plain-English explanation, expected and actual values, and its statement page. A reviewer can
+The same transaction card also carries any automated inconsistency findings. Six checks
+run today — balance continuity, duplicate transactions, round-number amounts, currency
+mismatches, journal batch integrity, and reference-list quality — see
+[`docs/analyst-flags.md`](docs/analyst-flags.md) for what each looks for and its real
+finding on the sample data. Each finding has a stable ID, severity, plain-English
+explanation, expected and actual values, and its statement page. A reviewer can
 acknowledge it, mark it resolved, or mark it as a false positive, with an optional note.
 Matcher answers and check actions are stored separately and both travel with the CSV export.
 
-The sample statements correctly produce zero balance findings. The page says **“No balance
-inconsistencies found”** after recording that the check ran; a clean result is never presented
-as a skipped check. Long proposed position values use a short preview with an accessible
+The sample data produces 35 findings across those six checks — 24 round-number amounts and
+11 near-duplicate reference-list name pairs, both `severity="info"`/`"review"` rather than
+errors, and genuine negatives everywhere else (the statements foot, nothing duplicates, no
+currency is out of place, every journal batch balances). The page reports the count after
+recording that every check ran; a clean result on any individual check is never presented
+as a skipped one. Long proposed position values use a short preview with an accessible
 expand/collapse control, while the complete value remains available to decisions and export.
 
 A separate frontend can consume `GET /api/review` and submit automated-flag decisions to
 `POST /api/flags/<flag_id>/decide`. The full schemas and screen-state guidance are in
 [`docs/FRONTEND-HANDOFF.md`](docs/FRONTEND-HANDOFF.md).
+
+`GET /api/gl-migration/flags` covers a second, unrelated dataset — the investor-level GL to
+loader upload (`src/gl_migration/`) — with its own five checks and 220 real findings. See
+[`docs/analyst-flags.md`](docs/analyst-flags.md) §3.
 
 ## Where every number on screen comes from
 
@@ -184,7 +194,8 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/ui/` | The exception-first review queue, and the wording it puts on screen |
 | `src/exporter.py` | The reviewed queue as a spreadsheet, carrying matcher answers, check findings and reviewer decisions |
 | `src/extraction/` | Document-agnostic PDF reading, with a Tesseract OCR fallback for a page with no text layer |
-| `src/checks/` | Registry, runner and automated inconsistency checks over already-structured records |
+| `src/checks/` | Registry, runner and six automated inconsistency checks over already-structured records — see `docs/analyst-flags.md` |
+| `src/gl_migration/` | A separate analyzer for the investor-level GL → loader dataset, exposed at `GET /api/gl-migration/flags` |
 | `src/reports/` | Balance sheet and income statement, rolled up directly from the `DIU`/`CoA` sheets — not the matcher's output |
 | `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
 | `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |

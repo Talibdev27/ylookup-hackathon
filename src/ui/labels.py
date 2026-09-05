@@ -28,6 +28,16 @@ FIELD_LABELS: dict[str, tuple[str, str]] = {
 
 CHECK_LABELS = {
     "balance_continuity": "Balance continuity",
+    "duplicate_transaction": "Possible duplicate transaction",
+    "round_number_amount": "Round-number amount",
+    "currency_mismatch": "Unusual currency for this account",
+    "journal_batch_integrity": "Journal batch integrity",
+    "reference_list_quality": "Reference list quality",
+    "gl_migration.legal_entity_not_listed": "Legal entity not in Entity Listing",
+    "gl_migration.deal_not_listed": "Deal not in Deals List",
+    "gl_migration.investor_not_listed": "Investor not in Investors List",
+    "gl_migration.mapping_gap": "Mapping gap (administrator-flagged)",
+    "gl_migration.entity_totals_do_not_tie": "GL and loader totals do not tie",
 }
 
 SEVERITY_LABELS = {

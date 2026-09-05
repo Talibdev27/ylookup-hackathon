@@ -17,10 +17,12 @@ Run:  python -m src.pipeline
 from __future__ import annotations
 
 import json
+import traceback
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from src.checks import journal_integrity, reference_quality
 from src.checks import run as checks
 from src.matcher import stages
 from src.matcher.normalise import normalise
@@ -72,6 +74,44 @@ class PipelineResult:
         return self.flags_found
 
 
+def _apply_workbook_checks(sheets: dict, check_result: checks.CheckResult) -> None:
+    """The two checks that read workbook sheets rather than statement rows.
+
+    `checks.apply_checks()` and its `Check` type are shaped `(rows) -> list[Flag]` --
+    right for every check over a transaction, wrong for one that reads the reference
+    workbook's own sheets, like whether a journal batch balances or a master list has a
+    near-duplicate entry. Rather than force a second signature through one registry, this
+    runs them directly and folds their findings into the same `CheckResult` the row-based
+    checks already produced, with the same failure isolation `apply_checks` uses: one
+    broken check is reported and skipped, not presented as a clean run.
+    """
+    diu_name = next((name for name in sheets if name.strip() == "DIU"), None)
+    if diu_name is not None and "CoA" in sheets:
+        check_result.checks_total += 1
+        try:
+            check_result.flags.extend(journal_integrity.check(sheets[diu_name], sheets["CoA"]))
+            check_result.checks_applied.append("journal_batch_integrity")
+        except Exception as error:
+            traceback.print_exc()
+            check_result.failures[f"journal_batch_integrity ({type(error).__name__})"] += 1
+
+    if "Legal Entity Master List" in sheets:
+        check_result.checks_total += 1
+        try:
+            entities = sorted(
+                {
+                    r["Legal Entity"]
+                    for r in sheets["Legal Entity Master List"]
+                    if r.get("Legal Entity")
+                }
+            )
+            check_result.flags.extend(reference_quality.check(entities))
+            check_result.checks_applied.append("reference_list_quality")
+        except Exception as error:
+            traceback.print_exc()
+            check_result.failures[f"reference_list_quality ({type(error).__name__})"] += 1
+
+
 def run(space: workspace.Workspace | None = None) -> PipelineResult:
     """Read the workspace, match every row, persist the result.
 
@@ -96,6 +136,7 @@ def run(space: workspace.Workspace | None = None) -> PipelineResult:
     sheets = load_workbook(space.workbook)
     rows = parse_statements(space.statements)
     check_result = checks.apply_checks(rows)
+    _apply_workbook_checks(sheets, check_result)
     conn = store_db.connect()
     try:
         data_store.ingest_workbook(conn, space.workbook)
