@@ -59,6 +59,28 @@ class ReferenceLists:
             deals=sheets.get("Deal & Position Master List", []),
         )
 
+    def canonical_spelling(self, name: str) -> str:
+        """The deal master's spelling of an entity the lists disagree about.
+
+        38 entities appear on more than one sheet spelled differently -- `NI DRACONIS
+        HOLDCO I SCSp` on the related party master is `NI Draconis HoldCo I SCSp` on the
+        deal master, and `NI V Kalvik TopCo Limited.` loses its full stop. They are the
+        same company, so which one gets written out is a choice, and the deal master is
+        the register the journal entries load against.
+
+        Only the spelling moves. Which list the counterparty was *found* on is a different
+        fact, and `classification` depends on it, so the caller keeps its own source.
+        """
+        from src.matcher.counterparty import fold_legal_form
+
+        target = fold_legal_form(name)
+        if not target:
+            return name
+        for entry in self.deal_names:
+            if fold_legal_form(entry) == target:
+                return entry
+        return name
+
     def counterparty_lists(self) -> list[tuple[str, list[str]]]:
         """The lists to search for a counterparty, in the order the Process sheet reviews
         them: related party, then legal entity, then investor, then vendor, then deal.

@@ -130,6 +130,59 @@ def complete(fragment: str, narrative: str) -> str:
     return longest
 
 
+# The bank writes a payment as a sentence naming both sides: "PMT FRM <payer> TO <payee>".
+# The comma is the bank's line wrap rather than a separator, so it is allowed inside a name.
+PARTIES = re.compile(
+    r"(?:PMT\s+)?(?:FRM|FROM)\s+(.+?)\s+TO\s+(?:TO\s+)?(.+?)(?=\.|,\s*$|\s+FOR\s|\s+PROJECT\s|$)"
+)
+
+# What the bank appends after a name: the reason for the payment, not part of who it was.
+TRAILING_CLAUSE = re.compile(r"\s+(PROJECT|ON\s+BEHALF\s+OF|FOR)\s.*$")
+
+# Legal forms the two sides spell differently. The master list writes `Limited`, the bank
+# writes `LTD`, and without this they are simply two different strings.
+LEGAL_FORMS = {"LIMITED": "LTD"}
+
+
+def strip_clause(name: str) -> str:
+    """Drop the reason for the payment from the end of a name.
+
+    `NI GMF II COOPERATIEF U.A. PROJECT IAPETUS` is one counterparty and one project, and
+    only the first half is who the money went to.
+    """
+    return tidy(TRAILING_CLAUSE.sub("", name.replace(",", " ")).strip())
+
+
+def fold_legal_form(text: str) -> str:
+    """`fold`, with legal forms reduced to one spelling: `... TopCo Limited` == `... TOPCO LTD`."""
+    return " ".join(LEGAL_FORMS.get(word, word) for word in fold(text).split())
+
+
+def other_party(narrative: str, own_names: list[str]) -> tuple[str, tuple[int, int]] | None:
+    """The side of a `FROM ... TO ...` sentence that is not this account.
+
+    The bank leads a narrative with a name, and usually that name is the counterparty --
+    but on a transfer between two of the fund's own vehicles it leads with an alias of the
+    account the statement belongs to, and the real counterparty is named in the sentence
+    that follows. `NORDVIK I.A.B. FUND I, TFR+ PMT FRM NI ABF II SCSP TO NI ABF I SCSP`
+    is the statement for NI ABF I, so the counterparty is NI ABF II.
+
+    Whichever of the two sides is not this account is the answer, which is a rule about
+    the transaction rather than about the words, and does not need a list to apply.
+    """
+    found = PARTIES.search(" ".join(narrative.upper().split()))
+    if not found:
+        return None
+    mine = {fold_legal_form(name) for name in own_names if name}
+    for side in found.groups():
+        name = strip_clause(side)
+        if not name or fold_legal_form(name) in mine:
+            continue
+        start = narrative.upper().find(name)
+        return name, ((start, start + len(name)) if start >= 0 else None)
+    return None
+
+
 @dataclass
 class Match:
     value: str
@@ -199,3 +252,24 @@ def match(
             seen.add(candidate.value)
             deduped.append(candidate)
     return deduped
+
+
+def match_by_legal_form(name: str, lists: list[tuple[str, list[str]]]) -> Match | None:
+    """A match that only the legal form was hiding.
+
+    `NI V AZURITE HOLDCO LTD` and `NI V Azurite HoldCo Limited` are the same company, and
+    every comparison in `match` misses them: they are not equal, neither opens the other,
+    and `LTD` against `LIMITED` breaks the token overlap.
+
+    Deliberately a fallback rather than another tier inside `match`. Reducing `Limited` to
+    `Ltd` collapses entries the master lists keep apart, so it is worth doing when the
+    alternative is no answer at all, and not worth doing when there is already a real one.
+    """
+    target = fold_legal_form(name)
+    if not target:
+        return None
+    for rank, (list_name, entries) in enumerate(lists):
+        for entry in entries:
+            if fold_legal_form(entry) == target:
+                return Match(entry, round(0.88 - rank * 0.02, 2), list_name)
+    return None

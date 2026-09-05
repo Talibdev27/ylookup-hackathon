@@ -79,7 +79,7 @@ answer different questions:
 | `src/exporter.py` | — | The reviewed queue as a spreadsheet, with who decided each answer |
 | `src/ui/` | W3 | Exception-first review queue |
 | `src/journal/` | W4 | Stage 6: two DIU lines per Batch ID |
-| `docs/` | all | Active task briefs, the roadmap, and the decision records |
+| `docs/` | all | Active task briefs, the roadmap, the decision records, and `counterparty-matching.md` / `deal-resolution.md` — how the hard columns work, and what was measured and rejected getting there |
 
 ## Requirements
 

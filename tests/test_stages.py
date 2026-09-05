@@ -69,6 +69,50 @@ def test_matched_sender_beneficiary_reads_the_stage_before_it() -> None:
     assert result.value == "Trentbeck Audit - Lu", "master lists carry office suffixes"
 
 
+def test_the_counterparty_is_the_party_that_is_not_this_account() -> None:
+    """On a transfer between two of the fund's own vehicles the bank leads with an alias
+    of the account the statement belongs to, so the leading name is the wrong answer."""
+    row = a_row(
+        account_name="NI ABF I SCSP",
+        narrative_raw="NORDVIK I.A.B. FUND I, TFR+ PMT FRM NI ABF II SCSP TO NI ABF I, SCSP FOR ACQ",
+    )
+    lists = ReferenceLists(related_parties=["NI ABF II SCSp", "NI ABF I SCSp"])
+    result = stages.pulled_out_sender_beneficiary(row, lists)
+    assert result.value == "NI ABF II SCSP", "the payer, not the account being read"
+    start, end = result.evidence.span
+    assert row.raw.narrative_raw[start:end] == "NI ABF II SCSP"
+
+
+def test_a_leading_name_that_is_identifiable_is_left_alone() -> None:
+    """The rule above only fires when the name we read is on none of the lists. A
+    narrative that names its counterparty up front must not be second-guessed."""
+    row = a_row()
+    assert stages.pulled_out_sender_beneficiary(row, LISTS).value == "TRENTBECK AUDIT LUXEMBOURG"
+
+
+def test_a_different_legal_form_is_the_same_company() -> None:
+    """`LTD` against `Limited` defeats every comparison in `match`: not equal, neither
+    opens the other, and the token overlap breaks on the last word."""
+    row = a_row(narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, /GB14NRVB35403891305213")
+    lists = ReferenceLists(related_parties=["NI V Azurite HoldCo Limited"])
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    assert stages.matched_sender_beneficiary(row, lists).value == "NI V Azurite HoldCo Limited"
+
+
+def test_the_deal_master_settles_a_spelling_the_lists_disagree_about() -> None:
+    """38 entities sit on more than one sheet spelled differently. Only the spelling
+    moves -- the list it was found on is what `classification` reads, so that stays."""
+    row = a_row(narrative_raw="52443473437109, NI DRACONIS HOLDCO I SCSP")
+    lists = ReferenceLists(
+        related_parties=["NI DRACONIS HOLDCO I SCSp"],
+        deal_names=["NI Draconis HoldCo I SCSp"],
+    )
+    row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, lists)
+    result = stages.matched_sender_beneficiary(row, lists)
+    assert result.value == "NI Draconis HoldCo I SCSp", "the deal master's spelling"
+    assert result.evidence.source_list == "Related Party Master", "but found on the related parties"
+
+
 def test_classification_reads_the_list_the_counterparty_matched_against() -> None:
     """A vendor is a Vendor. The stage never looks at the name, only at where it was
     found -- which is the whole reason `matched_sender_beneficiary` records the list."""
@@ -177,6 +221,67 @@ def test_flagging_for_review_is_an_answer_not_a_blank() -> None:
     assert result.status == "needs_review"
 
 
+DEALS = ReferenceLists(
+    legal_entities=["Nordvik Infrastructure V SCSp"],
+    related_parties=["NI V Azurite HoldCo Limited"],
+    deal_names=["NI V Azurite HoldCo Limited"],
+    project_codes=[{"Project Code": "Azurite Array"}],
+    deals=[
+        {"Legal Entity": "Nordvik Infrastructure V SCSp", "Deal Name": "NI V Azurite HoldCo Limited",
+         "Position": "NI V Azurite HoldCo Limited (Pallas Wind Limited (Azurite Array (Equity)))",
+         "Security Type": "Equity"},
+        {"Legal Entity": "Nordvik Infrastructure V SCSp", "Deal Name": "NI V Azurite HoldCo Limited",
+         "Position": "NI V Azurite HoldCo Limited (Pallas Wind Limited (Azurite Array (Funding loan)))",
+         "Security Type": "Funding loan"},
+    ],
+)
+
+
+def _through_to_the_deal(row):
+    """Drive the stages the deal pair reads, in registry order."""
+    for name in ("matched_legal_entity", "pulled_out_project_code", "matched_project_code",
+                 "pulled_out_sender_beneficiary", "matched_sender_beneficiary", "classification",
+                 "resolved_deal"):
+        row.fields[name] = dict(stages.REGISTRY)[name](row, DEALS)
+    return row
+
+
+def test_a_bank_fee_has_no_deal_behind_it() -> None:
+    """Only an investment has a deal. Every one of the 30 rows the human gave a deal is
+    classified Investment or Investment Transfer, so everything else says nothing rather
+    than reaching for the nearest name in a 6,635-row master."""
+    row = _through_to_the_deal(a_row(narrative_raw="CHARGES FOR 2, OUTWARD SEPA PAYMENT"))
+    assert row.fields["resolved_deal"].value is None
+    assert stages.resolved_position(row, DEALS).value is None
+
+
+def test_the_deal_is_the_counterparty_on_an_investment() -> None:
+    row = _through_to_the_deal(a_row(
+        narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, EQUITY: PROJECT AZURITE."))
+    assert row.fields["resolved_deal"].value == "NI V Azurite HoldCo Limited"
+
+
+def test_the_security_the_bank_bought_picks_the_position() -> None:
+    """Two positions sit under the deal, one equity and one loan, and the narrative says
+    which was bought."""
+    row = _through_to_the_deal(a_row(
+        narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, EQUITY: PROJECT AZURITE."))
+    result = stages.resolved_position(row, DEALS)
+    assert result.value.endswith("(Azurite Array (Equity)))") and result.status == "auto"
+
+
+def test_positions_that_fit_equally_well_go_to_a_reviewer_together() -> None:
+    """When the bank text does not say which security was bought, both candidates go up
+    under the human's own heading rather than one being picked at random."""
+    row = _through_to_the_deal(a_row(
+        narrative_raw="NI V AZURITE HOLDCO LTD, 24370KF00HEC, PAYMENT FROM NORDVIK "
+                      "INFRASTRUCTURE V SCSP TO NI V AZURITE HOLDCO LTD. PROJECT AZURITE."))
+    assert row.fields["resolved_deal"].value == "NI V Azurite HoldCo Limited"
+    result = stages.resolved_position(row, DEALS)
+    assert result.value.startswith("Review - multiple positions: ")
+    assert result.status == "needs_review" and len(result.alternatives) == 2
+
+
 def test_an_unknown_counterparty_is_unresolved_rather_than_guessed() -> None:
     row = a_row(narrative_raw="SOMEBODY ENTIRELY UNKNOWN LTD")
     row.fields["pulled_out_sender_beneficiary"] = stages.pulled_out_sender_beneficiary(row, LISTS)
@@ -214,10 +319,21 @@ def test_a_broken_stage_is_a_failure_not_an_unwritten_stage(monkeypatch=None) ->
 
 
 def test_an_unwritten_stage_is_reported_once_and_skipped() -> None:
-    payload = [{"row_id": 1, "source": {}, "raw": a_row().raw.__dict__.copy(), "fields": {}}]
-    _, unwritten, failures = apply_stages(payload, LISTS)
-    assert "resolved_position" in unwritten
-    assert not failures
+    """Every stage is written now, so this drives a declared-unwritten one directly.
+    Naming a real stage here meant the test lost its subject each time one landed."""
+    def unwritten_stage(row, lists):
+        raise NotImplementedError("W2")
+
+    original = list(stages.REGISTRY)
+    stages.REGISTRY[:] = [("resolved_position", unwritten_stage)]
+    try:
+        payload = [{"row_id": 1, "source": {}, "raw": a_row().raw.__dict__.copy(), "fields": {}}]
+        _, unwritten, failures = apply_stages(payload, LISTS)
+    finally:
+        stages.REGISTRY[:] = original
+
+    assert unwritten == ["resolved_position"]
+    assert not failures, "declaring a stage unwritten is not a failure"
 
 
 # ------------------------------------------------------- (iii) the ordering constraint
