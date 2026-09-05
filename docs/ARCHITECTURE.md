@@ -19,7 +19,7 @@ The pitch describes four agents. Here is where each one actually lives:
 |---|---|---|---|
 | A | **Pull data** | Read a PDF, get text and tables out of it | `src/extraction/pdf_text.py` (any PDF), `src/spine/pdf.py` (bank statements specifically) |
 | B | **Convert** | Raw text into structured records with a fixed shape | `src/contract.py` (`Row`/`Raw`), `src/matcher/normalise.py` |
-| C | **Match & import to Excel** | Resolve each record against the reference data, produce output | `src/matcher/` (stages, matching, scoring), `src/exporter.py`, `src/extraction/workbook_writer.py` |
+| C | **Match & import to Excel** | Resolve each record against the reference data, produce output | `src/matcher/` (stages, matching, scoring), `src/exporter.py` (CSV export), `src/reports/statements.py` (balance sheet / income statement) |
 | D | **Reviewer — find inconsistency** | Surface what the machine is unsure of, or what does not add up | `src/ui/` (human review queue), `src/checks/` (automated inconsistency flags) |
 
 Stage D is two things wearing one label on the whiteboard: a human reviewing what the
@@ -122,11 +122,13 @@ text the reviewer is looking at, not a cleaned-up copy of it. `src/matcher/count
 does the equivalent folding for names (`fold()`): strips accents, punctuation and case, so
 `NI ABF II MizarCo S.à r.l.` and `NI ABF II MIZARCO S.A R.L.` compare equal.
 
-For a future document type, this is where its own structuring logic goes — turning
-whatever `pdf_text.extract()` returned into a list of dict records with a stable set of
-keys, the way `spine/pdf.py` turns pages into `Row`s. `src/extraction/workbook_writer.py`
-is the mirror image: structured records back out to a formatted `.xlsx`, one sheet per
-document type.
+For a future document type read from its own PDF, this is where its own structuring logic
+goes — turning whatever `pdf_text.extract()` returned into a list of dict records with a
+stable set of keys, the way `spine/pdf.py` turns pages into `Row`s. The one statement
+output that exists today, `src/reports/statements.py`, does not go through this path at
+all — it reads the `DIU` and `CoA` sheets already sitting in the reference workbook
+directly, because a balance sheet and income statement can be rolled up from real posted
+journal lines without a PDF to parse in the first place. See section 5a below.
 
 ---
 
@@ -184,16 +186,30 @@ position, because the two are not in the same order. Two numbers per column:
 **agreement** (of what the human filled in, how much do we reproduce) and **net new** (of
 what they left blank, how much do we resolve).
 
-**Getting it to Excel/CSV:**
+**Getting it to CSV:** `src/exporter.py` turns the reviewed queue into a CSV: one row per
+transaction, the matcher's answer or the reviewer's correction (reviewer wins, including a
+reviewer's decision to give up, which clears the value rather than falling back to a guess
+that was already rejected), and who decided each one.
 
-- `src/exporter.py` turns the reviewed queue into a CSV: one row per transaction, the
-  matcher's answer or the reviewer's correction (reviewer wins, including a reviewer's
-  decision to give up, which clears the value rather than falling back to a guess that
-  was already rejected), and who decided each one.
-- `src/extraction/workbook_writer.py` is the more general form for a future document
-  type: any `{"sheet name": [records]}` to a formatted, multi-sheet `.xlsx`. Not wired
-  into the bank-statement pipeline, which has its own CSV exporter already; this is for
-  whatever stage C looks like for a second document type.
+## 5a · A second real output: the balance sheet and income statement
+
+`src/reports/statements.py` is not built on the matcher's output — the matcher does not
+produce journal entries (Stage 6 was cut from scope). It reads the `DIU` and `CoA` sheets
+already present in the reference workbook, joins on `Account`, and rolls up by the CoA's
+five real categories (`Assets`, `Liabilities`, `Capital`, `Revenues`, `Expenses`). Verified
+by hand that the expanded accounting equation ties to zero on the real data before this was
+written; `ties()` checks it on every call rather than assuming it.
+
+Every figure carries the caveat that this is one week's movements, not a point-in-time
+position — there is no opening balance in this data. Cash flow deliberately has no
+equivalent: the data has a cash/non-cash flag and a transaction classification, nothing
+that maps to operating, investing and financing activities, so `GET
+/api/companies/<id>/cash-flow` returns `available: false` with that reason rather than a
+fabricated number. See `docs/analyst-flags.md`.
+
+Exposed at `GET /api/companies`, `.../balance-sheet`, `.../income-statement`,
+`.../cash-flow` in `src/ui/app.py` — company ids are `slugify(legal entity name)`, the one
+manual coupling with the frontend's hardcoded copy of the same four ids (`docs/backend-integration.md`).
 
 ---
 
@@ -307,8 +323,9 @@ Adding a check: one function of shape `(records) -> list[Flag]` in `src/checks/`
 registry entry in `src/checks/run.py`, and tests against real data both clean and
 deliberately broken — `tests/test_footing.py` is the template. See `docs/ROADMAP.md`.
 
-Adding a second document type: a new parser over `src/extraction/pdf_text.py`, mirroring
-what `spine/pdf.py` does for statements, producing records that `workbook_writer.py` can
-render and that `src/checks/` can run over unchanged, since checks do not know or care
-which document type a record came from. See `docs/ROADMAP.md` for why bank statements are
-the only document type with real sample data today, and what the fallback is.
+Adding a second PDF-sourced document type: a new parser over `src/extraction/pdf_text.py`,
+mirroring what `spine/pdf.py` does for statements, producing records that `src/checks/` can
+run over unchanged, since checks do not know or care which document type a record came
+from. See `docs/ROADMAP.md` for why bank statements are the only PDF document type with
+real sample data today, and what the fallback is. A workbook-sourced output like the
+balance sheet does not need this path at all — see section 5a.

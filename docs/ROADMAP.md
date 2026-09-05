@@ -35,14 +35,21 @@ trusting row order.
 ## A second document type
 
 `src/extraction/pdf_text.py` reads any PDF into page text and page tables;
-`src/spine/pdf.py` is the statement parser built over it. A new document type — a balance
-sheet, an income statement, a cash flow — gets its own parser over the same primitive
-rather than its own PDF-reading code.
+`src/spine/pdf.py` is the statement parser built over it. **No sample balance sheet,
+income statement or cash flow PDF exists in the hackathon dataset**, and that has not
+changed — a new PDF-sourced document type still gets its own parser over the same
+primitive rather than its own PDF-reading code, whenever one turns up.
 
-**No sample of those documents exists in the hackathon dataset.** Until one does, the
-gradeable target is dataset 02 (investor-level GL → loader), which is real, present, and
-much larger: 34,000 source rows across 43 columns, four crosswalks, and a 19,000-row
-output.
+What changed: a balance sheet and income statement exist today anyway, without a PDF —
+`src/reports/statements.py` rolls them up directly from the `DIU` and `CoA` sheets already
+in the reference workbook, real posted journal lines, not a new document type at all. See
+`docs/ARCHITECTURE.md` §5a. Cash flow has no equivalent shortcut: the data has nothing that
+maps to operating/investing/financing activities, so it stays open.
+
+Dataset 02 (investor-level GL → loader) remains real, present, and untouched by any code
+here — 34,000 source rows across 43 columns, four crosswalks, and a 19,000-row output —
+the gradeable target if a genuinely new document type is wanted rather than a rollup of
+data already on hand.
 
 ## More checks
 
@@ -56,28 +63,26 @@ queue, available through the frontend JSON API, and included in the reviewed exp
 It currently finds nothing on the sample data, which is the correct answer — those
 statements do foot. Future checks worth adding are the ones that would have caught the
 interview's complaints: a subsequent event whose date was rolled forward rather than moved,
-a side-letter fee calculation that does not tie, a balance sheet with no bridge to the
-equity balance.
+and a side-letter fee calculation that does not tie.
+
+"A balance sheet with no bridge to the equity balance," listed here originally, is now
+partly answered: `src/reports/statements.py`'s `ties()` checks the expanded accounting
+equation on every balance sheet request, but as a boolean on the API response, not a
+`Flag` a reviewer acts on in the queue. Wiring it into `src/checks/` properly is still open.
 
 ## A front door
 
-The review queue assumes you already know what you are looking at. A landing step would
-take a folder of documents, say what it found in each, and hand the reviewer a queue per
-document rather than one flat list.
+**Built, 5 September** — a band at the top of the queue (`review.html`'s `.intro`
+section), not a separate landing page: two sentences on what the tool is, the
+Process-sheet finding count, and a link to the video when `YLOOKUP_VIDEO_URL` is set.
+Deliberately not a hero animation or a route change — the scoring rubric's UI criterion
+reads "Clean and considered... No AI slop," and moving the queue to make room for a
+landing page would have changed the URL the demo was filmed against.
 
-The narrower version of this is real and near: somebody opening the deployed URL cold --
-a judge, a fund manager sent a link -- lands on "Transactions to check" and 88 cards,
-with nothing on screen saying what the tool is or whose problem it solves.
-
-**Decided 5 September, and deliberately not built this weekend.** When it is built:
-
-- **A band at the top of the queue, not a landing page.** Two sentences, the 23-row
-  finding, a link to the video. Moving the queue to its own route to make room for a
-  front page changes the URL the demo is filmed against, and the video was the scarce
-  thing that weekend, not the screen.
-- **No motion.** The scoring rubric's UI criterion reads "Clean and considered. A
-  non-technical fund manager is the user. No AI slop." A tool that looks like a working
-  tool is the stronger answer, and the one number worth setting large is the finding
-  itself, which does the work a hero animation imitates.
-- **Link the video, never embed it.** An embed that fails to load on the judged URL is
-  worse than no video section.
+The wider version of this is still open: a landing step that takes a folder of documents,
+says what it found in each, and hands the reviewer a queue per document rather than one
+flat list across every fund. `truss/`'s Company Workspace (`docs/backend-integration.md`)
+is the real version of this now — a per-fund Review Queue tab, Balance Sheet, Income
+Statement and Cash Flow, backed by `GET /api/companies` — so the open piece left here is
+folding a document-upload step into that experience, not building a landing page for the
+Flask-only queue a second time.
