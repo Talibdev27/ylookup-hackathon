@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Review queue</title>
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#6b7280; --line:#e5e7eb; --accent:#0f766e; --warn:#b45309; }
+  body { margin:0; font:15px/1.5 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; gap:24px; align-items:baseline; }
+  h1 { font-size:17px; margin:0; font-weight:600; }
+  .counts { color:var(--muted); font-variant-numeric:tabular-nums; }
+  main { padding:20px 28px; max-width:1100px; }
+  .row { border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:12px; }
+  .narrative { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px;
+               background:#f9fafb; padding:10px; border-radius:6px; white-space:pre-wrap; }
+  mark { background:#fef3c7; padding:0 2px; }
+  .field { display:flex; gap:12px; align-items:baseline; padding:6px 0; border-top:1px solid var(--line); }
+  .key { color:var(--muted); width:230px; flex:none; }
+  .val { font-weight:500; }
+  .num { font-variant-numeric:tabular-nums; color:var(--muted); }
+  .unresolved { color:var(--warn); }
+  .empty { color:var(--muted); padding:40px 0; }
+</style>
+<header>
+  <h1>Review queue</h1>
+  <span class="counts">{{ counts.auto }} auto · {{ counts.remaining }} remaining · {{ counts.total }} total</span>
+</header>
+<main>
+  {% for row in rows %}
+    <article class="row">
+      <div class="narrative">{{ row.raw.narrative_raw }}</div>
+      {% for key, field in row.fields.items() %}
+        <div class="field">
+          <span class="key">{{ key }}</span>
+          <span class="val {{ 'unresolved' if field.status != 'auto' }}">{{ field.value or '—' }}</span>
+          <span class="num">{{ '%.2f'|format(field.confidence) }}</span>
+        </div>
+      {% endfor %}
+    </article>
+  {% else %}
+    <p class="empty">No rows yet. Run <code>python -m src.spine.build</code>.</p>
+  {% endfor %}
+</main>
