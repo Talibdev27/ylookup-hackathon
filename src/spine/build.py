@@ -13,6 +13,7 @@ from pathlib import Path
 
 from src.contract import Row
 from src.matcher.normalise import normalise
+from src.spine import pdf
 from src.spine.xlsx import Workbook
 
 DATASET = Path(
@@ -75,9 +76,11 @@ def write_sqlite(sheets: dict[str, list[dict[str, str]]], out: Path = OUT / "spi
 
 
 def parse_statements(directory: Path = STATEMENTS) -> list[Row]:
-    """Seven PDFs, four currencies, six business days. The filename encodes entity, bank,
-    currency and account short code -- parse it, do not hardcode."""
-    raise NotImplementedError("W1: pdfplumber over statements/, one Row per transaction line")
+    """Seven PDFs, four currencies. Verified to yield exactly 100 transactions."""
+    rows = pdf.parse_statements(directory)
+    if len(rows) != EXPECTED_ROWS["Staging Sheet"]:
+        raise AssertionError(f"parsed {len(rows)} transactions, expected 100")
+    return rows
 
 
 def main() -> int:

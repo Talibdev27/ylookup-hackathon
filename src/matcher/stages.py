@@ -8,7 +8,7 @@ before touching the hard ones, so there is always a working pipeline to demo.
 """
 from __future__ import annotations
 
-from src.contract import Evidence, Field, Row
+from src.contract import Alternative, Evidence, Field, Row
 
 # --------------------------------------------------------------------------- free
 
@@ -20,15 +20,41 @@ def matched_legal_entity(row: Row, legal_entities: list[str]) -> Field:
 
 
 def cash_leg_transtype(row: Row) -> Field:
-    """`Cash - Received - {CCY}` or `Cash - Disbursed - {CCY}`. Fully determined by the
-    currency and which of credit/debit is populated. No lookup, no model, no ambiguity."""
-    direction = "Received" if (row.raw.credit or 0) > 0 else "Disbursed"
-    value = f"Cash - {direction} - {row.raw.currency}"
+    """The cash side of the journal, in the row currency.
+
+    The Process sheet documents the rule as "Cash - Received or Cash - Disbursed in the
+    row currency, matching the credit or debit side."
+
+    The ground truth does not do that. All 100 rows are booked `Cash - Disbursed`,
+    including the 23 where money came in. We reproduce the data, because the data is what
+    the target system received -- but we flag every row where the documented rule and the
+    actual booking disagree, with the reason attached, and let a human decide.
+
+    That disagreement is the product: it is the "nobody checks whether this number foots
+    to that number" problem from the interview, sitting in their own working file.
+    """
+    incoming = (row.raw.credit or 0) > 0
+    value = f"Cash - Disbursed - {row.raw.currency}"
+    if not incoming:
+        return Field(
+            value=value,
+            confidence=1.0,
+            status="auto",
+            evidence=Evidence(text=f"debit row, {row.raw.currency}", source_list="derived"),
+        )
     return Field(
         value=value,
-        confidence=1.0,
-        status="auto",
-        evidence=Evidence(text=f"{direction.lower()} leg, {row.raw.currency}", source_list="derived"),
+        confidence=0.6,
+        status="needs_review",
+        evidence=Evidence(
+            text=(
+                f"credit of {row.raw.credit:,.2f} {row.raw.currency}: the Process sheet "
+                f"says a credit row books to Cash - Received, but every row in the "
+                f"working file is booked Cash - Disbursed"
+            ),
+            source_list="Process sheet, stage 4",
+        ),
+        alternatives=[Alternative(value=f"Cash - Received - {row.raw.currency}", confidence=0.4)],
     )
 
 

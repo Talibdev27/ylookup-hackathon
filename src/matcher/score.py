@@ -1,11 +1,17 @@
 """Score matcher output against the 100 human ground-truth rows in `Staging Sheet`.
 
-Two numbers matter and they are different questions:
+Two numbers matter and they answer different questions:
 
-  agreement  -- of the rows the human filled, how many do we match exactly?
+  agreement  -- of the rows the human filled, how many do we reproduce exactly?
   net new    -- of the rows the human left blank, how many do we resolve?
 
-The second is the whole pitch. The human left 52 of 100 counterparties unmatched.
+The second is the pitch. The human left 52 of 100 counterparties unmatched.
+
+Alignment note: the parsed rows come out in statement-filename order and the staging
+sheet is in its own order -- only 11 of 100 line up by position. Comparing by index
+silently scores the wrong pairs, so rows are joined on (narrative, amount, bank
+reference). That key is unique for 98 of 100 rows and covers all 100 as a multiset;
+the two genuine duplicates are consumed greedily.
 
 Usage:  python -m src.matcher.score data/rows.json
 """
@@ -13,28 +19,57 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from src.contract import STAGING_COLUMN
-from src.spine.xlsx import Workbook
+from src.spine.build import WORKBOOK, load_workbook
 
-WORKBOOK = Path(
-    "/Users/muhammadaminesaev/Downloads/Ylookup Hackathon Datasets/"
-    "01-bank-statements-to-journal-entries/workbook/"
-    "Bank statement to journal entries - working file (anonymised).xlsx"
-)
+Key = tuple[str, str, str]
 
 
-def load_truth(workbook_path: Path = WORKBOOK) -> list[dict[str, str]]:
-    return Workbook(str(workbook_path)).records("Staging Sheet")
+def _norm(value: str | None) -> str:
+    return " ".join((value or "").split()).strip()
 
 
-def score(rows: list[dict], truth: list[dict[str, str]]) -> dict[str, dict[str, int]]:
+def _truth_key(record: dict[str, str]) -> Key:
+    for column in ("Credit amount", "Debit amount"):
+        raw = (record.get(column) or "").strip()
+        if raw:
+            amount = f"{float(raw):.2f}"
+            break
+    else:
+        amount = ""
+    return _norm(record["Narrative"]), amount, _norm(record["Bank reference"])
+
+
+def _row_key(row: dict) -> Key:
+    raw = row["raw"]
+    value = raw["credit"] if raw["credit"] is not None else raw["debit"]
+    amount = f"{value:.2f}" if value is not None else ""
+    return _norm(raw["narrative_raw"]), amount, _norm(raw["bank_reference"])
+
+
+def align(rows: list[dict], truth: list[dict[str, str]]) -> list[tuple[dict, dict[str, str]]]:
+    """Pair each parsed row with its ground-truth record. Unmatched rows are dropped and
+    reported by the caller -- silently scoring an unaligned pair is worse than a gap."""
+    buckets: dict[Key, list[dict[str, str]]] = defaultdict(list)
+    for record in truth:
+        buckets[_truth_key(record)].append(record)
+    pairs = []
+    for row in rows:
+        candidates = buckets.get(_row_key(row))
+        if candidates:
+            pairs.append((row, candidates.pop(0)))
+    return pairs
+
+
+def score(pairs: list[tuple[dict, dict[str, str]]]) -> dict[str, dict[str, int]]:
     report: dict[str, dict[str, int]] = {}
     for key, column in STAGING_COLUMN.items():
         stats = {"human_filled": 0, "human_blank": 0, "agree": 0, "disagree": 0, "net_new": 0}
-        for row, expected_row in zip(rows, truth):
-            expected = (expected_row.get(column) or "").strip()
+        for row, record in pairs:
+            expected = (record.get(column) or "").strip()
             got = ((row.get("fields", {}).get(key) or {}).get("value") or "").strip()
             if expected:
                 stats["human_filled"] += 1
@@ -56,17 +91,20 @@ def main() -> int:
         print(f"no {path} yet -- run `python -m src.spine.build` first", file=sys.stderr)
         return 1
     rows = json.loads(path.read_text())
-    truth = load_truth()
-    if len(rows) != len(truth):
-        print(f"warning: {len(rows)} rows vs {len(truth)} ground-truth rows", file=sys.stderr)
+    truth = load_workbook(WORKBOOK)["Staging Sheet"]
+    pairs = align(rows, truth)
+    if len(pairs) != len(rows):
+        print(f"warning: {len(rows) - len(pairs)} rows did not align to ground truth", file=sys.stderr)
 
-    report = score(rows, truth)
+    report = score(pairs)
     print(f"{'field':32s} {'agree/filled':>14s} {'wrong':>6s} {'new/blank':>12s}")
     print("-" * 68)
     for key, s in report.items():
-        agreement = f"{s['agree']}/{s['human_filled']}"
-        net_new = f"{s['net_new']}/{s['human_blank']}"
+        agreement = "{}/{}".format(s["agree"], s["human_filled"])
+        net_new = "{}/{}".format(s["net_new"], s["human_blank"])
         print(f"{key:32s} {agreement:>14s} {s['disagree']:>6d} {net_new:>12s}")
+
+    print(f"\naligned {len(pairs)}/{len(rows)} rows against ground truth")
     return 0
 
 
