@@ -9,6 +9,12 @@ what kind of document it is second: see `docs/ROADMAP.md`.
 `to_json()` is the handoff point to anything that is not Python -- a Node frontend
 included. No extra dependency for it: `json` is the standard library, and a PDF's text
 and tables are already plain strings and lists once pdfplumber has read them.
+
+Every document here so far is digitally generated, so `pdfplumber` reads its text layer
+directly and there is nothing to recognise. `extract()` still falls back to `ocr.py` on
+any page whose text layer comes back empty, for the day a scanned page shows up -- and
+does nothing extra when the `tesseract` binary is not installed, which is today's normal
+case. See `ocr.py`'s docstring for what that binary is and how to install it.
 """
 from __future__ import annotations
 
@@ -18,6 +24,8 @@ from pathlib import Path
 
 import pdfplumber
 
+from src.extraction import ocr
+
 Table = list[list["str | None"]]
 
 
@@ -26,6 +34,7 @@ class Page:
     number: int
     text: str
     tables: list[Table]
+    ocr: bool = False  # True if `text` came from Tesseract rather than the PDF's own layer
 
 
 @dataclass
@@ -41,15 +50,24 @@ class ExtractedDocument:
         return "\n".join(page.text for page in self.pages)
 
 
-def extract(path: Path) -> ExtractedDocument:
+def extract(path: Path, *, ocr_fallback: bool = True) -> ExtractedDocument:
+    """`ocr_fallback=False` skips the Tesseract check entirely, for a caller that would
+    rather see an empty page than pay for OCR -- a batch job over hundreds of statements
+    it already knows are digitally generated, for instance."""
     pages = []
     with pdfplumber.open(path) as pdf:
         for number, page in enumerate(pdf.pages, start=1):
+            text = page.extract_text() or ""
+            used_ocr = False
+            if not text.strip() and ocr_fallback and ocr.available():
+                text = ocr.extract_page_image(page)
+                used_ocr = True
             pages.append(
                 Page(
                     number=number,
-                    text=page.extract_text() or "",
+                    text=text,
                     tables=page.extract_tables(),
+                    ocr=used_ocr,
                 )
             )
     return ExtractedDocument(source=path, pages=pages)

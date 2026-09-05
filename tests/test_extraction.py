@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from openpyxl import load_workbook
 
-from src.extraction import pdf_text, workbook_writer
+from src.extraction import ocr, pdf_text, workbook_writer
 from src.spine.build import STATEMENTS
 
 
@@ -42,6 +42,109 @@ def test_to_json_round_trips_a_real_statement() -> None:
         assert len(loaded["pages"]) == len(document.pages)
         assert loaded["pages"][0]["text"] == document.pages[0].text
         assert loaded["pages"][0]["tables"] == document.pages[0].tables
+
+
+class _FakePage:
+    """The two `pdfplumber` Page methods `extract()` actually calls."""
+
+    def __init__(self, text: str):
+        self._text = text
+
+    def extract_text(self) -> str:
+        return self._text
+
+    def extract_tables(self) -> list:
+        return []
+
+    def to_image(self, resolution=None):
+        class _Image:
+            original = "not a real image, the fake OCR call below never looks at it"
+
+        return _Image()
+
+
+class _FakePDF:
+    def __init__(self, pages: list[_FakePage]):
+        self.pages = pages
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _with_fake_pdf(pages: list[_FakePage], fn):
+    """Run `fn` with `pdfplumber.open` (as `pdf_text` calls it) swapped for a fake PDF --
+    no real file needed, since what is under test is the OCR-fallback branching, not
+    pdfplumber's own PDF reading, which the tests above already cover against real files.
+    """
+    original = pdf_text.pdfplumber.open
+    pdf_text.pdfplumber.open = lambda path: _FakePDF(pages)
+    try:
+        return fn()
+    finally:
+        pdf_text.pdfplumber.open = original
+
+
+def _with_ocr_stub(is_available: bool, reads_as: str, fn):
+    original_available = ocr.available
+    original_extract = ocr.extract_page_image
+    ocr.available = lambda: is_available
+    ocr.extract_page_image = lambda page: reads_as
+    try:
+        return fn()
+    finally:
+        ocr.available = original_available
+        ocr.extract_page_image = original_extract
+
+
+def test_ocr_fallback_fires_on_an_empty_text_layer_when_available() -> None:
+    result = _with_fake_pdf(
+        [_FakePage(text="")],
+        lambda: _with_ocr_stub(
+            True, "OCR READ THIS", lambda: pdf_text.extract(Path("fake.pdf"))
+        ),
+    )
+    assert result.pages[0].text == "OCR READ THIS"
+    assert result.pages[0].ocr is True
+
+
+def test_ocr_fallback_is_skipped_when_tesseract_is_not_available() -> None:
+    """An empty page stays empty rather than raising, when there is no OCR to fall back
+    to -- today's normal case, since the tesseract binary is not installed everywhere."""
+    result = _with_fake_pdf(
+        [_FakePage(text="")],
+        lambda: _with_ocr_stub(
+            False, "should never be read", lambda: pdf_text.extract(Path("fake.pdf"))
+        ),
+    )
+    assert result.pages[0].text == ""
+    assert result.pages[0].ocr is False
+
+
+def test_ocr_fallback_never_fires_when_the_text_layer_already_has_text() -> None:
+    result = _with_fake_pdf(
+        [_FakePage(text="already have this from the PDF itself")],
+        lambda: _with_ocr_stub(
+            True, "should never be read", lambda: pdf_text.extract(Path("fake.pdf"))
+        ),
+    )
+    assert result.pages[0].text == "already have this from the PDF itself"
+    assert result.pages[0].ocr is False
+
+
+def test_ocr_fallback_can_be_turned_off() -> None:
+    result = _with_fake_pdf(
+        [_FakePage(text="")],
+        lambda: _with_ocr_stub(
+            True,
+            "should never be read",
+            lambda: pdf_text.extract(Path("fake.pdf"), ocr_fallback=False),
+        ),
+    )
+    assert result.pages[0].text == ""
+    assert result.pages[0].ocr is False
 
 
 def test_write_workbook_round_trips() -> None:
@@ -73,6 +176,10 @@ def test_write_workbook_skips_empty_sheets_without_crashing() -> None:
 if __name__ == "__main__":
     test_extract_reads_every_page_of_a_real_statement()
     test_to_json_round_trips_a_real_statement()
+    test_ocr_fallback_fires_on_an_empty_text_layer_when_available()
+    test_ocr_fallback_is_skipped_when_tesseract_is_not_available()
+    test_ocr_fallback_never_fires_when_the_text_layer_already_has_text()
+    test_ocr_fallback_can_be_turned_off()
     test_write_workbook_round_trips()
     test_write_workbook_skips_empty_sheets_without_crashing()
     print("all extraction checks pass")
