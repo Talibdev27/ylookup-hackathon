@@ -14,6 +14,8 @@ carries the identity and version history:
                    filename, kind, a content hash, a version number, when
     pdf_pages      page number, text, tables (as JSON), whether OCR produced the text
     workbook_rows  sheet name, row index, the row itself (as JSON)
+    flags          what src/checks/ found, recomputed and replaced whole on every
+                   pipeline run rather than accumulated -- see store.record_flags()
 
 Re-uploading a file whose bytes have not changed does not create a new version -- see
 `store.py`'s hash check. Re-uploading a genuinely different file bumps the version and
@@ -24,7 +26,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/store.db")
+DEFAULT_PATH = Path("data/store.sqlite")  # data/*.sqlite is already gitignored
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -51,6 +53,17 @@ CREATE TABLE IF NOT EXISTS workbook_rows (
     sheet_name TEXT NOT NULL,
     row_index INTEGER NOT NULL,
     row_data TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_name TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    message TEXT NOT NULL,
+    source TEXT NOT NULL,
+    expected TEXT,
+    actual TEXT,
+    created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_filename ON documents(filename, kind);

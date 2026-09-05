@@ -88,15 +88,68 @@ def ingest_workbook(conn: Connection, path: Path) -> IngestResult:
         (path.name, content_hash, version, datetime.now(timezone.utc).isoformat()),
     )
     document_id = cursor.lastrowid
-    for sheet_name in book.sheet_names():
-        for index, row in enumerate(book.records(sheet_name)):
-            conn.execute(
-                "INSERT INTO workbook_rows (document_id, sheet_name, row_index, row_data) "
-                "VALUES (?, ?, ?, ?)",
-                (document_id, sheet_name, index, json.dumps(row)),
-            )
+    # The reference workbook runs to several thousand rows across its sheets --
+    # `executemany` in one transaction rather than one `execute()` per row, so a first
+    # real upload does not add a noticeable delay on top of the pipeline it triggers.
+    values = [
+        (document_id, sheet_name, index, json.dumps(row))
+        for sheet_name in book.sheet_names()
+        for index, row in enumerate(book.records(sheet_name))
+    ]
+    conn.executemany(
+        "INSERT INTO workbook_rows (document_id, sheet_name, row_index, row_data) "
+        "VALUES (?, ?, ?, ?)",
+        values,
+    )
     conn.commit()
     return IngestResult(document_id=document_id, version=version, changed=True)
+
+
+def record_flags(conn: Connection, flags: list) -> None:
+    """Replace the whole `flags` table with `flags`.
+
+    These are always fully recomputed from the current data on a run -- the same reason
+    `data/rows.json` is overwritten rather than appended to -- so re-running against
+    unchanged data should show the same flags, not the same flags twice.
+    """
+    conn.execute("DELETE FROM flags")
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executemany(
+        "INSERT INTO flags (check_name, severity, message, source, expected, actual, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                flag.check,
+                flag.severity,
+                flag.message,
+                json.dumps(flag.source),
+                json.dumps(flag.expected),
+                json.dumps(flag.actual),
+                now,
+            )
+            for flag in flags
+        ],
+    )
+    conn.commit()
+
+
+def read_flags(conn: Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT check_name, severity, message, source, expected, actual, created_at "
+        "FROM flags ORDER BY id"
+    ).fetchall()
+    return [
+        {
+            "check": r[0],
+            "severity": r[1],
+            "message": r[2],
+            "source": json.loads(r[3]),
+            "expected": json.loads(r[4]),
+            "actual": json.loads(r[5]),
+            "created_at": r[6],
+        }
+        for r in rows
+    ]
 
 
 def history(conn: Connection, filename: str, kind: str) -> list[dict]:

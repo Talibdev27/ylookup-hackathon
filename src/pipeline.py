@@ -21,12 +21,15 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from src.checks import footing
 from src.matcher import stages
 from src.matcher.normalise import normalise
 from src.matcher.reference import ReferenceLists
 from src.matcher.run import apply_stages
 from src.spine import workspace
 from src.spine.build import load_workbook, parse_statements
+from src.storage import db as store_db
+from src.storage import store as data_store
 
 OUT = Path("data")
 ROWS = OUT / "rows.json"
@@ -48,6 +51,7 @@ class PipelineResult:
     stages_total: int
     unwritten: list[str] = field(default_factory=list)
     failures: Counter = field(default_factory=Counter)
+    flags: int = 0
 
     @property
     def stages_applied(self) -> int:
@@ -64,6 +68,15 @@ def run(space: workspace.Workspace | None = None) -> PipelineResult:
     Ordering is this module's business: statements are normalised before matching because
     evidence spans index into the raw narrative, and reviewer decisions are dropped after
     a successful run because they no longer refer to these rows.
+
+    Every workbook and statement this reads also goes into `src/storage/` -- one
+    version-controlled record of everything ever uploaded, independent of the matcher's
+    own `data/rows.json`. Re-running against unchanged files is a no-op there (content is
+    compared by hash, not by when it arrived), so this costs nothing on the common case of
+    re-running the same data twice. `src/checks/footing.py` runs here too, over the same
+    rows before matching touches them, and its flags replace whatever was recorded on the
+    previous run -- both are cheap enough, and re-run often enough, that persisting them
+    is more useful than computing them only on demand.
     """
     space = space or workspace.current()
     if not space.ready:
@@ -71,6 +84,17 @@ def run(space: workspace.Workspace | None = None) -> PipelineResult:
 
     sheets = load_workbook(space.workbook)
     rows = parse_statements(space.statements)
+
+    conn = store_db.connect()
+    try:
+        data_store.ingest_workbook(conn, space.workbook)
+        for statement_path in space.statement_files:
+            data_store.ingest_pdf(conn, statement_path)
+        flags = footing.check(rows)
+        data_store.record_flags(conn, flags)
+    finally:
+        conn.close()
+
     for row in rows:
         row.raw.narrative_normalised, _ = normalise(row.raw.narrative_raw)
 
@@ -88,6 +112,7 @@ def run(space: workspace.Workspace | None = None) -> PipelineResult:
         stages_total=len(stages.REGISTRY),
         unwritten=unwritten,
         failures=failures,
+        flags=len(flags),
     )
 
 
@@ -101,6 +126,7 @@ def main() -> int:
         print("  not written yet: " + ", ".join(result.unwritten))
     for name, count in result.failures.items():
         print(f"  FAILED: {count} row(s) in {name} -- see the traceback above")
+    print(f"  {result.flags} flag(s) from the automated checks")
     return 0 if result.ok else 1
 
 

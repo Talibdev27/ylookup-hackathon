@@ -20,6 +20,8 @@ from werkzeug.utils import secure_filename
 
 from src import exporter, pipeline
 from src.spine import workspace
+from src.storage import db as store_db
+from src.storage import store as data_store
 from src.ui import labels
 
 # A bank statement is tens of kilobytes; a reference workbook a few megabytes. Anything
@@ -60,6 +62,16 @@ def load_decisions() -> dict[str, dict[str, dict]]:
 def save_decisions(decisions: dict[str, dict]) -> None:
     DECISIONS.parent.mkdir(parents=True, exist_ok=True)
     DECISIONS.write_text(json.dumps(decisions, indent=2))
+
+
+def load_flags() -> list[dict]:
+    """What `src/checks/` found on the last run. Written by `pipeline.run()`, not
+    computed here -- the queue only ever reads it, the same way it reads `rows.json`."""
+    conn = store_db.connect()
+    try:
+        return data_store.read_flags(conn)
+    finally:
+        conn.close()
 
 
 def open_questions(row: dict) -> list[tuple[str, dict]]:
@@ -159,6 +171,7 @@ def index():
         # to do, the other says it is waiting for your statements.
         has_data=bool(rows),
         export=exporter.summary(rows, decisions),
+        flags=load_flags(),
     )
 
 

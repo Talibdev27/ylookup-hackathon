@@ -110,6 +110,17 @@
       Showing the sample dataset. <a href="/upload">Load your own statements</a> to work on real ones.
     </p>
   {% endif %}
+  {% if flags %}
+    <div class="lede" style="background:var(--warn-soft); border-left:3px solid var(--warn);
+         padding:12px 15px; border-radius:0 8px 8px 0; color:#5c4212;">
+      <b>{{ flags | length }} automated check{{ 's' if flags | length != 1 }} did not pass:</b>
+      <ul style="margin:8px 0 0; padding-left:20px;">
+        {% for flag in flags %}
+          <li>{{ flag.message }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
   {% if has_data %}
   <p class="lede">
     These are the payments where the answer was not clear-cut. Everything else has been
