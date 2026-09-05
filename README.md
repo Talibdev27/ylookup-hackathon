@@ -42,7 +42,7 @@ That installs dependencies, builds the data spine, and prints the score against 
 100 human-graded ground-truth rows. Then:
 
 ```bash
-flask --app src.ui.app run --port 5001
+python3 serve.py
 ```
 
 Point `YLOOKUP_DATA` at the dataset directory if it is not in `~/Downloads`.
@@ -73,8 +73,9 @@ answer different questions:
 | Path | Owner | What |
 |---|---|---|
 | `src/contract.py` | shared | The row shape. Read `CONTRACT.md` before touching it. |
-| `src/spine/` | W1 | PDFs + workbook → `data/spine.sqlite`, `data/rows.json` |
-| `src/matcher/` | W2 | The six Process-sheet stages, plus `score.py` |
+| `src/pipeline.py` | — | Run the whole thing: `run(workspace) → PipelineResult` |
+| `src/spine/` | W1 | Reads the workbook and the statement PDFs |
+| `src/matcher/` | W2 | The Process-sheet stages, `ReferenceLists`, and `score.py` |
 | `src/ui/` | W3 | Exception-first review queue |
 | `src/journal/` | W4 | Stage 6: two DIU lines per Batch ID |
 | `docs/` | all | One brief per workstream |

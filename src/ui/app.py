@@ -18,6 +18,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
+from src import pipeline
 from src.spine import workspace
 from src.ui import labels
 
@@ -38,8 +39,9 @@ app.jinja_env.globals.update(
     highlight=labels.highlight,
 )
 
-ROWS = Path("data/rows.json")
-DECISIONS = Path("data/decisions.json")
+# The pipeline owns where these live and when they are invalidated.
+ROWS = pipeline.ROWS
+DECISIONS = pipeline.DECISIONS
 
 
 def load_rows() -> list[dict]:
@@ -166,21 +168,7 @@ def upload():
 
 def rebuild() -> None:
     """Re-run the pipeline over whatever is now in the workspace."""
-    from src.matcher.run import apply_stages, load_lists
-    from src.spine.build import load_workbook, parse_statements, write_sqlite
-    from src.matcher.normalise import normalise
-
-    space = workspace.current()
-    sheets = load_workbook(space.workbook)
-    write_sqlite(sheets)
-    rows = parse_statements(space.statements)
-    for row in rows:
-        row.raw.narrative_normalised, _ = normalise(row.raw.narrative_raw)
-    payload = [r.to_dict() for r in rows]
-    payload, _, _ = apply_stages(payload, load_lists())
-    ROWS.parent.mkdir(parents=True, exist_ok=True)
-    ROWS.write_text(json.dumps(payload, indent=2))
-    DECISIONS.unlink(missing_ok=True)
+    pipeline.run(workspace.current())
 
 
 @app.post("/reset")

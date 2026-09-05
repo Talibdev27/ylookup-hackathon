@@ -3,8 +3,7 @@
 set -euo pipefail
 
 python3 -m pip install --quiet -r requirements.txt
-python3 -m src.spine.build
-python3 -m src.matcher.run
-python3 -m src.matcher.score data/rows.json
+python3 -m src.pipeline
+python3 -m src.matcher.score
 echo
-echo "Review queue:  flask --app src.ui.app run --port 5001"
+echo "Review queue:  python3 serve.py"

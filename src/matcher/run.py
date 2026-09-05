@@ -16,23 +16,18 @@ genuine TypeError inside a working stage was reported as "not implemented yet" a
 column silently scored 0/100. Uniform arity removed the need to guess, and the
 distinction is now real.
 
-Run:  python -m src.matcher.run
+Called by src/pipeline.py, which owns the ordering and the persistence.
 """
 from __future__ import annotations
 
-import json
 import traceback
 from collections import Counter
 from dataclasses import asdict
-from pathlib import Path
 
 from src.contract import Evidence, Field, Raw, Row
 from src.matcher import stages
 from src.matcher.reference import ReferenceLists
 from src.spine.build import load_workbook
-
-ROWS = Path("data/rows.json")
-
 
 def load_lists() -> ReferenceLists:
     return ReferenceLists.from_workbook(load_workbook())
@@ -85,21 +80,3 @@ def apply_stages(
             row.fields[name] = result
             entry.setdefault("fields", {})[name] = asdict(result)
     return payload, unwritten, failures
-
-
-def main() -> int:
-    payload = json.loads(ROWS.read_text())
-    payload, unwritten, failures = apply_stages(payload, load_lists())
-    ROWS.write_text(json.dumps(payload, indent=2))
-
-    applied = len(stages.REGISTRY) - len(unwritten)
-    print(f"matcher: {applied}/{len(stages.REGISTRY)} stages applied to {len(payload)} rows")
-    if unwritten:
-        print("  not written yet: " + ", ".join(unwritten))
-    for name, count in failures.items():
-        print(f"  FAILED: {count} row(s) in {name} -- see the traceback above")
-    return 1 if failures else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

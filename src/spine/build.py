@@ -1,33 +1,21 @@
-"""Build the data spine: statements + workbook -> data/spine.sqlite and data/rows.json.
+"""Read a workspace: the reference workbook and the statement PDFs.
 
-Run:  python -m src.spine.build
-Must complete in under a minute from a clean checkout. Everything downstream reads the
-outputs of this module and never opens an .xlsx or a PDF again.
+Loading only. Orchestration lives in src/pipeline.py, which is the one place that knows
+the order these run in.
+
+This used to also write data/spine.sqlite -- a 2MB dump of the workbook, on every run,
+on both code paths, that nothing ever read. The matcher reaches the reference lists
+through ReferenceLists and the review queue reads rows.json, so it was deleted rather
+than kept behind a flag for a reader that does not exist.
 """
 from __future__ import annotations
 
-import json
 import os
-import sqlite3
 from pathlib import Path
 
 from src.contract import Row
-from src.matcher.normalise import normalise
 from src.spine import pdf, workspace
 from src.spine.xlsx import Workbook
-
-OUT = Path("data")
-
-
-def _paths() -> tuple[Path, Path]:
-    space = workspace.current()
-    if not space.ready:
-        raise SystemExit(
-            "No data to work from. Upload a reference workbook and at least one bank "
-            "statement, or point YLOOKUP_DATA at the dataset directory."
-        )
-    return space.workbook, space.statements
-
 
 WORKBOOK, STATEMENTS = (lambda s: (s.workbook, s.statements))(workspace.current())
 
@@ -86,25 +74,6 @@ def load_workbook(path: Path | None = None) -> dict[str, list[dict[str, str]]]:
     return sheets
 
 
-def write_sqlite(sheets: dict[str, list[dict[str, str]]], out: Path = OUT / "spine.sqlite") -> None:
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.unlink(missing_ok=True)
-    conn = sqlite3.connect(out)
-    for sheet, records in sheets.items():
-        if not records:
-            continue
-        table = "".join(ch if ch.isalnum() else "_" for ch in sheet.strip().lower()).strip("_")
-        columns = list(records[0])
-        safe = [f'"{c}"' for c in columns]
-        conn.execute(f'CREATE TABLE "{table}" ({", ".join(f"{c} TEXT" for c in safe)})')
-        conn.executemany(
-            f'INSERT INTO "{table}" VALUES ({", ".join("?" * len(columns))})',
-            [[r.get(c, "") for c in columns] for r in records],
-        )
-    conn.commit()
-    conn.close()
-
-
 def parse_statements(directory: Path | None = None) -> list[Row]:
     """One Row per transaction line across every statement in the directory.
 
@@ -123,25 +92,3 @@ def parse_statements(directory: Path | None = None) -> list[Row]:
     if not rows:
         raise SystemExit(f"No transactions found in {directory}. Are these bank statements?")
     return rows
-
-
-def main() -> int:
-    space = workspace.current()
-    if not space.ready:
-        raise SystemExit(
-            "No data to work from. Upload a reference workbook and at least one bank "
-            "statement, or point YLOOKUP_DATA at the dataset directory."
-        )
-    sheets = load_workbook(space.workbook)
-    write_sqlite(sheets)
-    rows = parse_statements(space.statements)
-    for row in rows:
-        row.raw.narrative_normalised, _ = normalise(row.raw.narrative_raw)
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "rows.json").write_text(json.dumps([r.to_dict() for r in rows], indent=2))
-    print(f"spine built: {len(sheets)} sheets, {len(rows)} rows")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -1,7 +1,8 @@
 # W1 · Data spine + ETL
 
-**Deliverable:** `python -m src.spine.build` produces `data/spine.sqlite` and
-`data/rows.json` in under 60 seconds from a clean checkout.
+**Deliverable:** `python -m src.pipeline` produces `data/rows.json` in under 60 seconds
+from a clean checkout. `src/spine/` is the loading half; `src/pipeline.py` owns the order
+the steps run in.
 
 ## Job
 
@@ -9,8 +10,9 @@
    entity, bank, currency and account short code — parse them, do not hardcode. Four
    currencies (EUR, USD, GBP, DKK), six business days. `src/spine/pdf.py` has the
    filename regex; the PDF body is yours.
-2. Load all 15 workbook sheets into SQLite. **Already done** — `load_workbook()` and
-   `write_sqlite()` work and assert on row counts.
+2. Load all 15 workbook sheets. **Already done** — `load_workbook()` works and asserts on
+   row counts for the sample. (An earlier version also dumped them to SQLite; nothing read
+   it, so it was deleted.)
 3. Emit `rows.json` in the `CONTRACT.md` shape with `fields` empty. W2 fills them,
    W3 renders them.
 
