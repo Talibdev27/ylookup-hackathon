@@ -88,8 +88,20 @@ Then the interview quote, on screen as text:
 > they send. I put it through an AI coding tool first, and it produced a forty-point memo
 > of what was wrong."
 
-> "That is the fund manager describing his own administrator. So we built the thing that
-> reads it — and shows its work."
+Then the line that is the whole project, from the same call:
+
+> "Which raises the question of whether I should be building software to check my own fund
+> administrator."
+
+> "He said that. We built it."
+
+One more, because it decides what you claim later:
+
+> "As a user I am not sensitive to whether a turn took them an hour or forty-eight hours.
+> What I care about is the count of turns."
+
+> "So this is not about being fast. A turn gets spent when something comes back wrong. This
+> shows its work on every number, so there is less to come back."
 
 ### 0:45–1:25 · One: it reads the statements
 

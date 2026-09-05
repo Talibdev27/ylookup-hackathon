@@ -4,16 +4,30 @@ Fund administrators turn bank statements into journal entries by hand. The worki
 we were given shows what that costs: of 100 transaction rows, **52 have no counterparty
 match at all**, 30 project codes do not resolve, and 3 rows are simply flagged `Review`.
 
-From the interview transcript, a fund manager on the same problem:
+From the interview transcript, a fund manager describing his own administrator:
 
 > "From a quality control perspective there just is not any. I do not think it even needs
 > frontier-level intelligence to catch. Frankly I no longer read what they send. I put it
 > through an AI coding tool first, and it produced a forty-point memo of what was wrong."
 
-So this does the work **and shows its evidence**. Ten matcher stages propose a counterparty,
-a project code, a deal, a position and a classification for every row; the reviewer sees the
-proposal, its confidence in words, and the exact span of bank narrative it came from, and
-approves, corrects, or says the machine is right to be unsure.
+> "Which raises the question of whether I should be building software to check my own fund
+> administrator."
+
+**This is that software.**
+
+It is not built to be fast, because speed is not what he asked for:
+
+> "As a user I am not sensitive to whether a turn took them an hour or forty-eight hours.
+> What I care about is the count of turns. That is the drag on my time."
+
+A turn is spent when something comes back wrong. So this does the work **and shows its
+evidence**, because the way to cut turns is to make every answer checkable before it goes
+back — he checks everything today only because he cannot tell which numbers are safe.
+
+Ten matcher stages propose a counterparty, a project code, a deal, a position and a
+classification for every row. The reviewer sees the proposal, its confidence in words, and
+the exact span of bank narrative it came from, and approves, corrects, or says the machine
+is right to be unsure.
 
 ## Try it
 
