@@ -57,23 +57,26 @@ the administrator's own file, in one run. The reasoning is in
 | **Fund** · `matched_legal_entity` | 100/100 | — |
 | **Cash side of the entry** · `cash_leg_transtype` | 100/100 | — |
 | **Project mentioned** · `pulled_out_project_code` | 25/25 | 0/75 |
-| **Type of transaction** · `classification` | 93/100 | — |
-| **Project code** · `matched_project_code` | 92/100 | — |
-| **Other side of the entry** · `counterparty_transtype` | 92/100 | — |
-| **Name in the bank text** · `pulled_out_sender_beneficiary` | 45/55 | 45/45 |
-| **Counterparty** · `matched_sender_beneficiary` | 31/48 | 8/52 |
-| **Deal** · `resolved_deal` | 25/30 | 0/70 |
-| **Position** · `resolved_position` | 13/30 | 0/70 |
+| **Type of transaction** · `classification` | 98/100 | — |
+| **Project code** · `matched_project_code` | 99/100 | — |
+| **Other side of the entry** · `counterparty_transtype` | 98/100 | — |
+| **Name in the bank text** · `pulled_out_sender_beneficiary` | 53/55 | 45/45 |
+| **Counterparty** · `matched_sender_beneficiary` | 45/48 | 8/52 |
+| **Deal** · `resolved_deal` | 26/30 | 0/70 |
+| **Position** · `resolved_position` | 26/30 | 0/70 |
 
 A dash under *net new* means the human left nothing blank in that column, so there was
 nothing for us to resolve.
 
-A column's misses are not all defects. **Counterparty** disagrees on fourteen rows and
-sends eleven of them to a reviewer rather than booking something wrong. **Position** reads
-worst and is not: on 26 of its 30 rows the reviewer gets either the answer or a short list
-with the answer on it, because a deal holding several equally valid positions gets a
-shortlist instead of a guess. Every missing point is accounted for
-row by row in [`docs/where-the-points-go.md`](docs/where-the-points-go.md).
+A column's misses are not all defects. **Counterparty** is the hardest column on the sheet
+and now disagrees with the human on **nothing**: the three rows it does not reproduce are
+three it declines, because they name a group entity by an in-house alias that appears
+nowhere in the workbook. Across all ten columns there are seven disagreements in total.
+
+Of the rest, eight rows want an answer the statement and the reference data do not contain,
+and five are contradictions in the client's own file — including three booked to a deal
+that exists in no master list. Every missing point is accounted for row by row in
+[`docs/where-the-points-go.md`](docs/where-the-points-go.md).
 
 ## Using it on your own data
 
@@ -132,8 +135,8 @@ Read `45/45` as "we produced a name on all 45", never as "we got 45 right".
 **A row can land in neither number.** If the human filled a cell and we return no answer,
 it counts as neither agreement nor a disagreement, because declining to guess is not the
 same as guessing wrong. So the agreement and wrong counts do not add up to the rows the
-human filled — on **Counterparty** they come to 45 of 48, and the missing three are rows
-we handed to a reviewer.
+human filled — on **Counterparty** the 45 agreements and 0 disagreements come to 45 of 48,
+and the missing three are rows we handed to a reviewer.
 
 ## Layout
 

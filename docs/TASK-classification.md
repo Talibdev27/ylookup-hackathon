@@ -1,7 +1,7 @@
 # Task · `classification` and `counterparty_transtype`
 
 > **Done — 5 September.** Both stages are written and in `REGISTRY`. `classification`
-> scores **93/100**, `counterparty_transtype` **92/100**. Kept as the record of how they
+> scores **98/100**, `counterparty_transtype` **98/100**. Kept as the record of how they
 > were approached and what was measured on the way; the remaining misses are accounted
 > for row by row in `where-the-points-go.md`. Nothing below is outstanding work.
 
