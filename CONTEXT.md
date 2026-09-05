@@ -75,8 +75,14 @@ it disagrees with the data, the data wins and the disagreement is surfaced to a 
 sample workbook has one; real client data has no answer key.
 
 **Agreement / net new** — the two numbers that matter, and they are different questions.
-Agreement is how often we reproduce an answer the human filled in. Net new is how often
-we resolve a row they left blank.
+Agreement is how often we reproduce an answer the human filled in. Net new is how often we
+fill in a row they left blank.
+
+Neither number is a score out of the whole file, and neither means quite what it looks
+like. **Net new is a measure of coverage, not of correctness**: a blank row has no answer
+to check against, so any value we emit counts. And a row where the human answered and we
+did not counts as **neither** agreement nor disagreement — declining to answer is a
+different act from answering wrongly, and the arithmetic keeps them apart.
 
 ## Beyond the matcher
 

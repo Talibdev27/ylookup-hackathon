@@ -3,9 +3,19 @@
 Two numbers matter and they answer different questions:
 
   agreement  -- of the rows the human filled, how many do we reproduce exactly?
-  net new    -- of the rows the human left blank, how many do we resolve?
+  net new    -- of the rows the human left blank, how many do we fill in?
 
 The second is the pitch. The human left 52 of 100 counterparties unmatched.
+
+Read `net new` as coverage, not as correctness. A blank row has no answer to check
+against -- that is what makes it blank -- so the loop below counts any value we produce
+and cannot tell a good one from a bad one. Only `agreement` compares against a human
+answer.
+
+A row where the human answered and we did not is counted as neither `agree` nor
+`disagree`. Declining to answer is a different act from answering wrongly, and mixing
+them would hide the thing this product argues for, so `agree + disagree` is deliberately
+less than `human_filled`.
 
 Alignment note: the parsed rows come out in statement-filename order and the staging
 sheet is in its own order -- only 11 of 100 line up by position. Comparing by index

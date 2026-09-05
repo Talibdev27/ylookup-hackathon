@@ -120,7 +120,20 @@ provenance, because "can you show us where it came from" is the question being a
 answer different questions:
 
 - **agreement** — of the rows the human filled, how many do we reproduce exactly?
-- **net new** — of the rows the human left blank, how many do we resolve?
+- **net new** — of the rows the human left blank, how many do we fill in?
+
+Two things these numbers do not say, spelled out because they are the first things a
+careful reader will ask:
+
+**Net new measures coverage, not accuracy.** A row the human left blank has no answer key
+— that is why it is blank — so nothing checks the value we put there. Any answer counts.
+Read `45/45` as "we produced a name on all 45", never as "we got 45 right".
+
+**A row can land in neither number.** If the human filled a cell and we return no answer,
+it counts as neither agreement nor a disagreement, because declining to guess is not the
+same as guessing wrong. So the agreement and wrong counts do not add up to the rows the
+human filled — on **Counterparty** they come to 45 of 48, and the missing three are rows
+we handed to a reviewer.
 
 ## Layout
 
