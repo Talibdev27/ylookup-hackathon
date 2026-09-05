@@ -1,7 +1,12 @@
 # Task · `classification` and `counterparty_transtype`
 
-Two columns, filled on all 100 ground-truth rows, both scoring **0/100** right now.
-Together they are the largest block of unclaimed score left. You work in one file,
+> **Done — 5 September.** Both stages are written and in `REGISTRY`. `classification`
+> scores **93/100**, `counterparty_transtype` **92/100**. Kept as the record of how they
+> were approached and what was measured on the way; the remaining misses are accounted
+> for row by row in `where-the-points-go.md`. Nothing below is outstanding work.
+
+Two columns, filled on all 100 ground-truth rows, both scoring 0/100 when this was
+written. Together they were the largest block of unclaimed score. You work in one file,
 `src/matcher/stages.py`, so nobody else is in your way.
 
 Read `AGENTS.md` first — it has the conventions and the loop. Then work these steps in

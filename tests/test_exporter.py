@@ -79,8 +79,12 @@ def test_the_statement_it_came_from_travels_with_the_row() -> None:
 
 
 def test_columns_appear_only_for_fields_the_matcher_produced() -> None:
-    """Six of the ten stages are unwritten. Empty columns for them would imply the answer
-    was looked at and left blank."""
+    """A column the matcher produced nothing for is left out rather than left empty.
+
+    An empty column implies the answer was looked at and left blank, which is a different
+    claim from never having been asked -- the same distinction the review queue draws on
+    screen. It mattered most when six stages were unwritten; it still holds for a row
+    where a stage declined to answer."""
     text = to_csv([a_row(1, matched_legal_entity=field("Nordvik Infrastructure V SCSp"))], {})
     header = text.splitlines()[0]
     assert "Fund" in header

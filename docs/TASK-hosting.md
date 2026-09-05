@@ -1,7 +1,13 @@
 # Task · Host it — Argha
 
-The brief says hosting is optional and **earns extra points**. Nobody else is on it, so
-this is the cheapest score left on the table.
+> **Done — 5 September.** Live at <https://ylookup-hackathon.onrender.com/>, config in
+> `render.yaml`. Two things still need a human in the Render dashboard, both in
+> `TASK-submission.md`: the service is not picking up pushes to `main`, and a second,
+> stale deployment at `ylookup-review.onrender.com` should be deleted. Nothing else below
+> is outstanding.
+
+The brief says hosting is optional and **earns extra points**. Nobody was on it when this
+was written, so it was the cheapest score left on the table.
 
 Read `AGENTS.md` first. Work these steps in order; each ends on something you can check.
 

@@ -332,7 +332,7 @@ def test_an_unwritten_stage_is_reported_once_and_skipped() -> None:
     """Every stage is written now, so this drives a declared-unwritten one directly.
     Naming a real stage here meant the test lost its subject each time one landed."""
     def unwritten_stage(row, lists):
-        raise NotImplementedError("W2")
+        raise NotImplementedError("not written yet")
 
     original = list(stages.REGISTRY)
     stages.REGISTRY[:] = [("resolved_position", unwritten_stage)]
