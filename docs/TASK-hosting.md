@@ -1,10 +1,14 @@
 # Task · Host it — Argha
 
 > **Done — 5 September.** Live at <https://ylookup-hackathon.onrender.com/>, config in
-> `render.yaml`. Two things still need a human in the Render dashboard, both in
-> `TASK-submission.md`: the service is not picking up pushes to `main`, and a second,
-> stale deployment at `ylookup-review.onrender.com` should be deleted. Nothing else below
-> is outstanding.
+> `render.yaml`, redeployed by hand and verified against `main`. One thing still needs a
+> human in the Render dashboard: a second, stale deployment at `ylookup-review.onrender.com`
+> should be deleted. Nothing else below is outstanding.
+>
+> **If auto-deploy is off, every later push needs another manual deploy.** The service sat
+> six commits behind for the better part of an hour before anyone noticed, because a stale
+> instance looks exactly like a working one. After the last push before submission, open
+> the URL and check the top card is the 29,700,000 EUR row, not the 0.44 bank charge.
 
 The brief says hosting is optional and **earns extra points**. Nobody was on it when this
 was written, so it was the cheapest score left on the table.

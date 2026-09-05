@@ -56,6 +56,9 @@ Two things worth knowing about that instance:
 - **A second, stale deployment exists** at `ylookup-review.onrender.com`, running a build
   from before the upload-feedback fix. Nothing links to it. Delete it in the Render
   dashboard so nobody lands on it.
+- **Check the live site is on the last commit before you submit.** It has already been six
+  commits behind once. The quick test: the top card should be the 29,700,000 EUR row. If it
+  is the 0.44 bank charge, the deploy is stale — redeploy from the Render dashboard.
 
 ---
 
