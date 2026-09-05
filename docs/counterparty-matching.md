@@ -190,3 +190,6 @@ looked identical in the aggregate and only separated when run one at a time.
 
 Stage tests need no workbook: `tests/test_stages.py` builds a three-line `ReferenceLists`
 in memory.
+
+See also [deal-resolution.md](deal-resolution.md) — the deal a payment belongs to is
+looked up from the counterparty this stage resolves, so it inherits whatever happens here.
