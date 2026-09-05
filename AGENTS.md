@@ -9,6 +9,9 @@ the matcher was unsure about. `README.md` covers what it is and how to run it.
 - `CONTRACT.md` — the row shape every part of the system passes around.
 - `docs/TASK-*.md` — a self-contained brief per open piece of work, in ordered steps.
   Start at the one you were handed.
+- `docs/adr/` — decisions that would otherwise look like mistakes. Read before arguing
+  with one.
+- `docs/ROADMAP.md` — what comes after the weekend, and what is deliberately not built.
 
 ## The loop
 
@@ -44,9 +47,8 @@ misses as `alternatives`. A confident wrong value is the failure this product ar
 against — the fund manager in the interviews stopped trusting output nobody checked.
 
 **Where the docs and the data disagree, the data wins, and the disagreement is worth
-surfacing.** The client's `Process` sheet describes rules their own working file breaks in
-23 places. Reproducing the data keeps the output loadable; flagging the difference is the
-demo.
+surfacing** — see `docs/adr/0001`. Reproducing the data keeps the output loadable;
+flagging the difference is the demo.
 
 **Spans index the raw narrative.** `evidence.span` is a character offset into
 `narrative_raw`, because that is the text highlighted on screen. `normalise()` returns an

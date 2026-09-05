@@ -4,7 +4,7 @@
 one transaction table per page. This module is the generic primitive underneath it and
 under every future document type -- balance sheets, income statements, cash flow
 statements -- none of which share that layout, or with each other. Extract first, decide
-what kind of document it is second: see `docs/TASK-extraction-agent.md`.
+what kind of document it is second: see `docs/ROADMAP.md`.
 """
 from __future__ import annotations
 

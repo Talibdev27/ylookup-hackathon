@@ -115,7 +115,7 @@ it is not worth an evening. Say so in the channel rather than going quiet.
 
 - **`src/journal/` is 35 lines of `NotImplementedError` that nothing imports.** Stage 6 was
   cut from scope. Delete the package — a reviewer reads it as abandoned work, and code
-  review is 25%. The knowledge in it is already in `docs/W4-journal-demo.md`.
+  review is 25%. The knowledge in it is already in `docs/ROADMAP.md`.
 - **The repo is private and must be public before submission**, or the code-review score is
   zero: `gh repo edit Talibdev27/ylookup-hackathon --visibility public`. Coordinate with
   Firdavs so it happens once, deliberately.

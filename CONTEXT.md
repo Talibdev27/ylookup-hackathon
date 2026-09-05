@@ -17,6 +17,12 @@ text a reviewer sees on screen.
 uppercase ASCII, held in the reference lists in full with accents and legal suffixes.
 Bridging those two spellings is most of the matching work.
 
+**As-written / resolved** — every lookup answer splits in two: the words the bank
+actually wrote, and the master-list entry they resolve to. `Pulled Out Sender/Beneficiary`
+against `Matched Sender/Beneficiary`, `Pulled Out Project Code` against `Matched Project
+Code`. Kept apart because extraction and matching fail differently, and a reviewer looking
+at a wrong answer needs to see whether the bank was misread or the list was.
+
 **Row** — one transaction on its way to becoming a journal entry. Carries the raw
 statement values and a **Field** per column the matcher fills.
 
@@ -27,6 +33,23 @@ were rejected. Never a bare string: a value with no provenance cannot be reviewe
 **Evidence** — where a value came from. A span into the narrative, the reference list it
 was found in, and a plain-English reason. Rendered verbatim to a fund manager, so it is
 written in their language and never carries technical detail.
+
+**Classification** — what kind of transaction a row is. Seven values, and they are the
+data's rather than the documentation's: `Other`, `Internal`, `Investment Transfer`,
+`Investment`, `Related Party`, `Vendor`, `Review`.
+
+**Flag for review** — `Flag for review - no project match` is an *answer*, not a blank. It
+is the client's own wording for "no code fits, a human has to pick", and reproducing it
+says so out loud where an empty cell would imply nobody looked.
+
+**Overhead row** — a transaction with no project because the counterparty is the bank
+itself: charges, commissions, credit interest. Booked to an `OH -` code rather than a
+project code.
+
+**Inherited doubt** — a value is only as certain as the value it was derived from. The
+Process sheet states it as *"each value is only as good as the stage before it"*, and it
+is why a transaction type resting on an unsure classification comes back unsure too,
+rather than presenting as settled.
 
 ## The reference data
 

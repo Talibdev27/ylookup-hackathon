@@ -10,7 +10,7 @@ A break in that arithmetic is a different kind of problem to an unresolved count
 it means either a transaction is missing from what was extracted, or the statement itself
 does not reconcile. Either way it is not something a matching stage can paper over, and
 it is exactly the "does this number foot to that number" gap from the interview -- see
-`docs/TASK-checks-agent.md`.
+`docs/ROADMAP.md`.
 """
 from __future__ import annotations
 
