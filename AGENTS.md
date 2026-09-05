@@ -7,8 +7,8 @@ the matcher was unsure about. `README.md` covers what it is and how to run it.
 
 - `CONTEXT.md` — the domain words. Read it before naming anything.
 - `CONTRACT.md` — the row shape every part of the system passes around.
-- `docs/TASK-*.md` — a self-contained brief per open piece of work. Start at the one you
-  were handed.
+- `docs/TASK-*.md` — a self-contained brief per open piece of work, in ordered steps.
+  Start at the one you were handed.
 
 ## The loop
 
