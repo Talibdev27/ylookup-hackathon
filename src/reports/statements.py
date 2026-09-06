@@ -1,8 +1,8 @@
 """A balance sheet and an income statement, rolled up from the real `DIU` journal lines.
 
 Not derived from the matcher's own output -- the matcher does not produce journal
-entries; turning its answers into one was cut from scope. This reads the `DIU` sheet
-already present in the reference workbook instead: 200 real
+entries; turning its answers into one was Stage 6, cut from scope (`docs/ROADMAP.md`).
+This reads the `DIU` sheet already present in the reference workbook instead: 200 real
 posted lines, joined to the `CoA` sheet's real chart-of-accounts categories on `Account`.
 Every account code in `DIU` matched a `CoA` entry exactly when this was checked against
 the bundled sample -- no fuzzy join, no guessing.
@@ -22,8 +22,8 @@ numerically.
 from __future__ import annotations
 
 # The five categories the CoA sheet actually uses -- not the six the Process sheet
-# describes for classification (a different vocabulary for a different question) --
-# and which normal-balance direction each is positive in. Debit
+# describes for classification (a different vocabulary for a different question, see
+# docs/adr/0001) -- and which normal-balance direction each is positive in. Debit
 # increases Assets and Expenses; credit increases everything else. The opposite of debit
 # is not "negative", it is the account's own normal balance.
 DEBIT_NORMAL = {"Assets", "Expenses"}

@@ -1,4 +1,4 @@
-// Client-side calls to the real Python backend's review API.
+// Client-side calls to the real Python backend's review API (docs/FRONTEND-HANDOFF.md).
 // Separate from backend.ts on purpose: everything in backend.ts runs server-side inside
 // a Server Component, but the review tab needs live interactivity -- accept a proposal,
 // acknowledge a flag, see the queue shrink -- which has to run in the browser. A browser

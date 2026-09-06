@@ -37,10 +37,11 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
 # Every route a cross-origin frontend actually calls. Not just /api/*: /rows/<id>/decide
-# predates the /api prefix and was kept at its original path deliberately for the
-# server-rendered UI, which means it needs this header too, or a browser fetch to it
-# fails before Flask ever sees it -- caught by actually clicking the button in a real
-# browser, not just curling it server-side, which has no CORS to enforce in the first place.
+# predates the /api prefix and was kept at its original path deliberately (see
+# FRONTEND-HANDOFF.md, "existing route preserved") for the server-rendered UI, which
+# means it needs this header too, or a browser fetch to it fails before Flask ever sees
+# it -- caught by actually clicking the button in a real browser, not just curling it
+# server-side, which has no CORS to enforce in the first place.
 CROSS_ORIGIN_PREFIXES = ("/api/", "/rows/")
 
 
@@ -488,7 +489,7 @@ def api_cash_flow(company_id: str):
     """Deliberately honest rather than invented: the data has a cash/non-cash flag
     (`cash_leg_transtype`) and a transaction classification, but nothing that maps to
     operating, investing and financing activities. Returning fabricated numbers here is
-    exactly the failure this whole product argues against.
+    exactly the failure this whole product argues against -- see docs/analyst-flags.md.
     """
     entity = _entities_by_slug().get(company_id)
     if not entity:
@@ -500,7 +501,8 @@ def api_cash_flow(company_id: str):
             "reason": (
                 "This data has a cash/non-cash flag and a transaction classification, "
                 "but nothing that maps to operating, investing and financing activities. "
-                "Building this needs a real mapping decision, not a rollup."
+                "Building this needs a real mapping decision, not a rollup -- see "
+                "docs/analyst-flags.md."
             ),
         }
     )

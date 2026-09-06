@@ -20,6 +20,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 const STORAGE_KEY = "truss.session";
 
 // No real auth in v1 — a role/actor picked on "/" and kept in localStorage.
+// See docs/truss1.0.md.
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);

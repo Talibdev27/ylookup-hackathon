@@ -310,9 +310,10 @@ const STATEMENT_METRICS: Record<Document["statementKind"], string[]> = {
 };
 
 /**
- * Marks a document "processed" once the upload completes. There is no real OCR/LLM
- * backing this: the file is never opened, and the analysis is left honestly blank
- * rather than filled in with invented figures -- see the comment inside for why.
+ * Fills in a document's structured data and AI analysis once "processing" completes.
+ * Figures are generated, not extracted -- there is no real OCR/LLM backing this yet
+ * (docs/truss1.0.md). Real, plausible-looking numbers so the spreadsheet/AI panel have
+ * something to show for the demo.
  */
 export async function finishProcessing(documentId: string): Promise<Document | undefined> {
   const doc = await getDocument(documentId);

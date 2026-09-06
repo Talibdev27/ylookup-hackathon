@@ -1,8 +1,7 @@
 // The real Python matcher app -- a separate server on its own origin, not the mock
-// Route Handlers under src/app/api/**. The company/balance-sheet/income-statement/
-// cash-flow pages are wired here; investor/fund-manager dashboards stay on the mock
-// store, and document upload is now split -- see BackendUpload.tsx and upload-client.ts
-// for the real path used by the four real funds.
+// Route Handlers under src/app/api/**. See docs/backend-integration.md for what each
+// endpoint returns and why the three financial statement pages are wired here while
+// investor/fund-manager/document upload stay on the mock store for now.
 //
 // BACKEND_URL is a plain (non-NEXT_PUBLIC_) env var on purpose: every call in this file
 // runs server-side, in a Server Component or a Route Handler, never in the browser, so

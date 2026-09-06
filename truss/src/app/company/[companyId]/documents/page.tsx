@@ -11,8 +11,9 @@ export default async function CompanyDocumentsPage({
   const { companyId } = await params;
 
   // Real companies (the Python matcher's own four funds) get real uploads, wired to the
-  // Flask backend's /api/upload and /api/gl-migration/upload; everything else keeps the
-  // mock upload flow.
+  // Flask backend; everything else keeps the mock upload flow. See
+  // docs/backend-integration.md for why these are two different data paths, and
+  // src/ui/app.py's /api/upload and /api/gl-migration/upload for what this calls.
   const realCompanies = await fetchCompanies();
   if (realCompanies.some((company) => company.id === companyId)) {
     return <BackendUpload companyId={companyId} />;

@@ -2,7 +2,7 @@
 
 A bank account is opened in one currency and, in the ordinary case, every line on its
 statement is denominated in that currency -- the account number itself usually even
-encodes it, in the statement filename itself. A row whose
+encodes it (see `docs/ROADMAP.md` / `CONTEXT.md` on statement filenames). A row whose
 `raw.currency` differs from the currency the rest of that account's rows agree on is
 either a mis-extracted field or a transaction that genuinely landed in the wrong place,
 and either way it is worth a reviewer's attention before the amount is booked as if it

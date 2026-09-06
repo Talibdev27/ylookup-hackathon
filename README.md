@@ -32,13 +32,13 @@ acknowledge, resolve, or say the machine is right to be unsure.
 
 ## Try it
 
-- **Backend:** <https://web-production-7fbe8.up.railway.app/>
-- **Frontend:** <https://ylookup-hackathon.vercel.app/>
+- **Live:** <https://ylookup-hackathon.onrender.com/>
+  *(free tier — it sleeps after 15 minutes, so the first load takes 30–60 seconds)*
 
 `data/rows.json` is committed, which is unusual for generated output and deliberate: the
-deployed backend has no persistent disk yet, so without it a restart leaves the app with
-an empty queue and nothing to show. The dataset it is built from is the client's and is
-not redistributed here — delete the file and run `./run.sh` to rebuild it from your own copy.
+free tier has no persistent disk, so without it a restart leaves the deployed app with an
+empty queue and nothing to show. The dataset it is built from is the client's and is not
+redistributed here — delete the file and run `./run.sh` to rebuild it from your own copy.
 
 Or locally, from a clean clone:
 
@@ -64,7 +64,8 @@ own working file does not follow:
 We reproduce the data so the output stays loadable, and flag the disagreement on every
 affected row with the reason in plain English. That is the fund manager's complaint —
 *"nobody reads it and asks whether this number foots to that number"* — made concrete on
-the administrator's own file, in one run.
+the administrator's own file, in one run. The reasoning is in
+[`docs/adr/0001`](docs/adr/0001-trust-the-data-over-the-process-sheet.md).
 
 ## What it scores today
 
@@ -94,8 +95,8 @@ nowhere in the workbook. Across all ten columns there are seven disagreements in
 
 Of the rest, eight rows want an answer the statement and the reference data do not contain,
 and five are contradictions in the client's own file — including three booked to a deal
-that exists in no master list. Every missing point is accounted for row by row against
-the reference data, not written off as noise.
+that exists in no master list. Every missing point is accounted for row by row in
+[`docs/where-the-points-go.md`](docs/where-the-points-go.md).
 
 ## Using it on your own data
 
@@ -125,9 +126,10 @@ rejected.
 
 The same transaction card also carries any automated inconsistency findings. Six checks
 run today — balance continuity, duplicate transactions, round-number amounts, currency
-mismatches, journal batch integrity, and reference-list quality. Each finding has a
-stable ID, severity, plain-English explanation, expected and actual values, and its
-statement page. A reviewer can
+mismatches, journal batch integrity, and reference-list quality — see
+[`docs/analyst-flags.md`](docs/analyst-flags.md) for what each looks for and its real
+finding on the sample data. Each finding has a stable ID, severity, plain-English
+explanation, expected and actual values, and its statement page. A reviewer can
 acknowledge it, mark it resolved, or mark it as a false positive, with an optional note.
 Matcher answers and check actions are stored separately and both travel with the CSV export.
 
@@ -140,12 +142,14 @@ as a skipped one. Long proposed position values use a short preview with an acce
 expand/collapse control, while the complete value remains available to decisions and export.
 
 A separate frontend can consume `GET /api/review` and submit automated-flag decisions to
-`POST /api/flags/<flag_id>/decide`.
+`POST /api/flags/<flag_id>/decide`. The full schemas and screen-state guidance are in
+[`docs/FRONTEND-HANDOFF.md`](docs/FRONTEND-HANDOFF.md).
 
 `GET /api/gl-migration/flags` covers a second, unrelated dataset — the investor-level GL to
 loader upload (`src/gl_migration/`) — with its own five checks and 220 real findings on
 the bundled sample. `/gl-upload` takes a real GL and/or loader workbook for a new
 tranche, the same "uploaded wins, bundled sample is the fallback" shape `/upload` uses.
+See [`docs/analyst-flags.md`](docs/analyst-flags.md) §3.
 
 ## Where every number on screen comes from
 
@@ -183,24 +187,27 @@ and the missing three are rows we handed to a reviewer.
 
 ## Layout
 
+See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
+
 | Path | What |
 |---|---|
 | `run.sh` | The feedback loop: build the spine, run every stage, print the scoreboard |
 | `run-tests.sh` | Every suite, exiting non-zero on the first failure |
 | `serve.py` | Starts the review queue |
-| `src/contract.py` | The row shape every stage reads and writes |
+| `src/contract.py` | The row shape every stage reads and writes. `CONTRACT.md` explains it |
 | `src/pipeline.py` | Runs the whole thing: `run(workspace) → PipelineResult` |
 | `src/spine/` | Reads the reference workbook and the statement PDFs |
 | `src/matcher/` | The ten Process-sheet stages, `ReferenceLists`, and `score.py` |
 | `src/ui/` | The exception-first review queue, and the wording it puts on screen |
 | `src/exporter.py` | The reviewed queue as a spreadsheet, carrying matcher answers, check findings and reviewer decisions |
 | `src/extraction/` | Document-agnostic PDF reading, with a Tesseract OCR fallback for a page with no text layer |
-| `src/checks/` | Registry, runner and six automated inconsistency checks over already-structured records |
+| `src/checks/` | Registry, runner and six automated inconsistency checks over already-structured records — see `docs/analyst-flags.md` |
 | `src/gl_migration/` | A separate analyzer and upload workspace for the investor-level GL → loader dataset, exposed at `/gl-upload` and `GET /api/gl-migration/flags` |
 | `src/reports/` | Balance sheet and income statement, rolled up directly from the `DIU`/`CoA` sheets — not the matcher's output |
 | `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
 | `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
-| `truss/` | A Next.js frontend, four of its pages (including real uploads for the four real funds) wired to the real backend above |
+| `docs/` | The architecture, the roadmap, and the decision records. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us; `FRONTEND-HANDOFF.md` is the JSON API contract for a separate frontend; `backend-integration.md` covers the `truss/` Next.js app that actually consumes it |
+| `truss/` | A Next.js frontend, four of its pages (including real uploads for the four real funds) wired to the real backend above — see `docs/backend-integration.md` |
 
 ## Requirements
 

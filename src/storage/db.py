@@ -1,11 +1,11 @@
 """The unified store: every PDF and workbook upload, extracted once and kept -- with a
 full version history rather than an overwrite.
 
-One SQLite file, not a managed database service. This app already commits to state
-living on disk, one instance, a persistent volume if the platform offers one -- a
-`.sqlite` file fits that exactly as well as the `data/rows.json` and `data/decisions.json`
-this app already writes. This adds structure to that state, not a different deployment
-shape or a new kind of thing to host.
+One SQLite file, not a managed database service. `docs/TASK-hosting.md` already commits
+this app to state living on disk, one instance, a persistent volume if the platform
+offers one -- a `.sqlite` file fits that exactly as well as the `data/rows.json` and
+`data/decisions.json` this app already writes. This adds structure to that state, not a
+different deployment shape or a new kind of thing to host.
 
 Two content tables, one per file type, both hanging off one `documents` table that
 carries the identity and version history:
