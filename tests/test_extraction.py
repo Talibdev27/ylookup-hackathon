@@ -144,6 +144,30 @@ def test_ocr_fallback_can_be_turned_off() -> None:
     assert result.pages[0].ocr is False
 
 
+def test_a_missing_wrapper_package_degrades_like_a_missing_binary() -> None:
+    """OCR is a fallback this dataset never reaches, and `pdf_text` imports `ocr`
+    unconditionally, so an unguarded `import pytesseract` puts the whole review queue
+    behind a pip install. The package and the binary are separate installs and either can
+    be absent on its own; both have to degrade the same way."""
+    import importlib
+
+    saved = ocr.pytesseract
+    ocr.pytesseract = None
+    try:
+        assert ocr.available() is False, "no wrapper means OCR cannot run"
+        try:
+            ocr.extract_page_image(None)
+        except RuntimeError as refusal:
+            assert "pytesseract package" in str(refusal), "say which half is missing"
+        else:
+            raise AssertionError("asking for OCR without the wrapper must refuse")
+    finally:
+        ocr.pytesseract = saved
+
+    # And the app still imports, which is the failure this guards against.
+    assert importlib.import_module("src.ui.app")
+
+
 if __name__ == "__main__":
     test_extract_reads_every_page_of_a_real_statement()
     test_to_json_round_trips_a_real_statement()
