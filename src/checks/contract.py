@@ -2,7 +2,7 @@
 
 Mirrors `src/contract.py`'s Field/Evidence on purpose: a flag is never a bare string,
 because "inconsistent" with no citation is exactly the unchecked output the fund manager
-in the interviews stopped trusting -- see CONTEXT.md. `message` reaches a fund manager
+in the interviews stopped trusting. `message` reaches a fund manager
 verbatim, the way `Evidence.text` does for the matcher.
 """
 from __future__ import annotations

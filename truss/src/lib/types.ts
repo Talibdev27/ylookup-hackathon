@@ -1,4 +1,4 @@
-// Domain types for TRUSS. See docs/TRUSS.md for the product spec these encode.
+// Domain types for TRUSS.
 
 export type Role = "investor" | "fund-manager";
 

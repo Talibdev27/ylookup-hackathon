@@ -14,8 +14,7 @@ export default async function BalanceSheetPage({
   const { companyId } = await params;
 
   // Real companies (the Python matcher's own four funds) are served from the real
-  // backend; everything else keeps using the mock document/upload store. See
-  // docs/backend-integration.md for why these are two different data paths.
+  // backend; everything else keeps using the mock document/upload store.
   const real = await fetchBalanceSheet(companyId);
   if (real) {
     const statement: FinancialStatement = {

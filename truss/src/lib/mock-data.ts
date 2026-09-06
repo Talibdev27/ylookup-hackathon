@@ -7,13 +7,12 @@ import type {
   Investor,
 } from "./types";
 
-// Seed data for the TRUSS demo. Mirrors the examples in docs/TRUSS.md (§8, §12, §14,
-// §16.1, §22, §29) rather than inventing a different story.
+// Seed data for the TRUSS demo.
 
 // The four real funds the Python matcher app has actual journal data for -- ids match
 // that backend's own slugify(legal entity name) exactly, since it is the source of
-// truth for these. See src/lib/backend.ts and docs/backend-integration.md. If the
-// Python side's _slug() ever changes, these four ids have to change with it.
+// truth for these. See src/lib/backend.ts. If the Python side's _slug() ever changes,
+// these four ids have to change with it.
 const NORDVIK_FUND_IDS = [
   "nordvik-infrastructure-advanced-bioenergy-fund-i-scsp",
   "nordvik-infrastructure-advanced-bioenergy-fund-ii-scsp",

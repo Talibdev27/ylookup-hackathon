@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getCompany, getDocument, getStatement } from "@/lib/store";
 
 // GET /api/documents/{document_id}/excel — a real .xlsx built from the structured data,
-// not a fake download. See docs/truss1.0.md.
+// not a fake download.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ documentId: string }> }

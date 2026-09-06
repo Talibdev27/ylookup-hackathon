@@ -22,8 +22,9 @@ function guessStatementKind(name: string): Document["statementKind"] {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // POST /api/documents/upload — multipart form: file, companyId, and optional statementKind.
-// No real OCR/LLM behind this (see docs/truss1.0.md) — it simulates the processing delay
-// server-side and returns plausible structured data.
+// The file itself is never opened -- this records that something was uploaded and lists
+// it, but says plainly that it was not read: no invented figures, no invented issues, no
+// confidence number. See createUploadedDocument/finishProcessing in lib/store.ts.
 export async function POST(req: Request) {
   const form = await req.formData().catch(() => null);
   if (!form) {

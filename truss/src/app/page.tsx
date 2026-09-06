@@ -6,7 +6,7 @@ import { ArrowRight, Building2, UserRound } from "lucide-react";
 import { useSession } from "@/lib/session";
 import type { FundManager, Investor } from "@/lib/types";
 
-// No real auth in v1 (docs/truss1.0.md) — one click drops you into the first
+// No real auth in v1 — one click drops you into the first
 // investor/fund manager on file rather than picking a specific one.
 export default function RolePickerPage() {
   const router = useRouter();

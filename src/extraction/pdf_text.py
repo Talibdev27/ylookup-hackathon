@@ -4,7 +4,7 @@
 one transaction table per page. This module is the generic primitive underneath it and
 under every future document type -- balance sheets, income statements, cash flow
 statements -- none of which share that layout, or with each other. Extract first, decide
-what kind of document it is second: see `docs/ROADMAP.md`.
+what kind of document it is second.
 
 `to_json()` is the handoff point to anything that is not Python -- a Node frontend
 included. No extra dependency for it: `json` is the standard library, and a PDF's text

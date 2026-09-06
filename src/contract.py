@@ -1,4 +1,4 @@
-"""The row contract. Shared by every workstream. See CONTRACT.md."""
+"""The row contract. Shared by every workstream."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict

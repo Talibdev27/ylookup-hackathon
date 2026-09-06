@@ -3,7 +3,7 @@
 // The real analyst workflow, live against the Python matcher app: the transactions it
 // was unsure about, and what the automated checks found -- not the mock AI-review flow
 // under src/app/company/[companyId]/ai-review, which is a different, invented feature
-// this data does not back. See docs/backend-integration.md.
+// this data does not back.
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/format";
