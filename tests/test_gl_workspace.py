@@ -111,9 +111,37 @@ def test_gl_upload_route_runs_the_real_checks_against_uploaded_files() -> None:
         _reset()
 
 
+def test_api_gl_migration_upload_returns_json_not_a_redirect() -> None:
+    """`/api/gl-migration/upload` is the JSON sibling `truss/`'s dropzone actually calls
+    -- same validation and processing as `/gl-upload`, a body instead of a redirect."""
+    _reset()
+    from src.ui import app as ui
+
+    client = ui.app.test_client()
+    try:
+        empty = client.post("/api/gl-migration/upload")
+        assert empty.status_code == 400
+        assert empty.get_json() == {"error": "Choose at least one workbook to upload."}
+
+        with open(load.SOURCE_GL, "rb") as gl_fh, open(load.OUTPUT_LOADER, "rb") as out_fh:
+            response = client.post(
+                "/api/gl-migration/upload",
+                data={"gl": (gl_fh, "gl.xlsx"), "loader": (out_fh, "loader.xlsx")},
+                content_type="multipart/form-data",
+            )
+        assert response.status_code == 200
+        body = response.get_json()
+        assert body["ok"] is True
+        assert body["flags_found"] == 4 + 16 + 198 + 2
+        assert body["by_check"]["gl_migration.investor_not_listed"] == 198
+    finally:
+        _reset()
+
+
 if __name__ == "__main__":
     test_nothing_uploaded_falls_back_to_the_bundled_sample()
     test_uploading_one_file_leaves_the_other_on_the_bundled_sample()
     test_uploading_both_files_replaces_both()
     test_gl_upload_route_runs_the_real_checks_against_uploaded_files()
+    test_api_gl_migration_upload_returns_json_not_a_redirect()
     print("all gl_workspace checks pass")

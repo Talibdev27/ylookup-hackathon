@@ -1,12 +1,13 @@
 # The TRUSS frontend, connected to the real backend
 
-Three of TRUSS's pages are wired to the real Python matcher app instead of the mock
+Four of TRUSS's pages are wired to the real Python matcher app instead of the mock
 in-memory store `docs/truss1.0.md` documented: `truss/src/lib/backend.ts` (server-side
-fetches) and `truss/src/lib/review-client.ts` (client-side, for the interactive review
-queue). Everything else in `truss/` — investor/fund-manager dashboards for the mock
-companies, the document upload flow, "AI Review" — is unchanged and still runs on its
-own mock data. Nothing here removes or breaks that; a page checks the real backend
-first and falls back to the mock store if the company isn't one of the four real funds.
+fetches), `truss/src/lib/review-client.ts` (client-side, for the interactive review
+queue), and `truss/src/lib/upload-client.ts` (client-side, for real uploads — see
+"Uploading" below). Everything else in `truss/` — investor/fund-manager dashboards for
+the mock companies, the "AI Review" tab — is unchanged and still runs on its own mock
+data. Nothing here removes or breaks that; a page checks the real backend first and
+falls back to the mock store if the company isn't one of the four real funds.
 
 ## Run both sides
 
@@ -45,6 +46,27 @@ to run in the browser, not the Next.js server. A browser fetch is subject to COR
 unlike a server-to-server one, which is why `src/ui/app.py` has an `after_request` hook
 allowing cross-origin reads on `/api/*` specifically.
 
+## Uploading
+
+**`POST /api/upload`, `POST /api/gl-migration/upload`** (`src/ui/app.py`) — the
+"Documents" tab (`truss/src/components/BackendUpload.tsx`, via
+`truss/src/lib/upload-client.ts`) is a client component for the same reason the review
+queue is: the file picker lives in the browser. Both routes are JSON siblings of the
+plain-Flask `/upload` and `/gl-upload` pages — same validation and processing
+(`_process_statement_upload` / `_process_gl_upload` in `src/ui/app.py`), but a JSON
+response instead of a redirect, since a fetch() caller wants a result to render, not a
+page to follow. Covered by the same `/api/*` CORS prefix as the review queue; a
+multipart/form-data POST with no custom headers is a CORS-safelisted "simple request"
+regardless, so no preflight is even involved.
+
+Uploads here are dataset-wide, not scoped to the company whose Documents tab they were
+opened from: the reference workbook and statements cover every fund the matcher knows,
+and the GL/loader pair is a separate dataset entirely. `companyId` is only used to link
+back to that company's own Review Queue tab afterward. For a mock company (not one of
+the four real funds), the Documents tab keeps the original mock `UploadDropzone` /
+`DocumentsBrowser` flow, which posts to this app's own `/api/documents/upload` route and
+returns fabricated data — see that route's own comment for why.
+
 ## Company ids
 
 `Company.id` for the four real funds is the Python backend's own `slugify(legal entity
@@ -59,7 +81,7 @@ they are two different codebases; this is the one manual coupling to remember.
 | Variable | Used by | Default |
 |---|---|---|
 | `BACKEND_URL` | `truss/src/lib/backend.ts` (server-side) | `http://localhost:5001` |
-| `NEXT_PUBLIC_BACKEND_URL` | `truss/src/lib/review-client.ts` (client-side) | `http://localhost:5001` |
+| `NEXT_PUBLIC_BACKEND_URL` | `truss/src/lib/review-client.ts`, `truss/src/lib/upload-client.ts` (client-side) | `http://localhost:5001` |
 
 Two separate variables because they run in two different places: `BACKEND_URL` never
 needs the `NEXT_PUBLIC_` prefix since it is only ever read on the server, and giving it
@@ -72,8 +94,10 @@ that prefix would needlessly expose it to the client bundle.
   (see `NORDVIK_FUND_IDS` in `mock-data.ts`). `investmentValueGbp` for these four is `0`
   rather than an invented figure — the matcher data is transaction activity, not a
   committed-capital number.
-- Does not change the mock document-upload flow, the "AI Review" tab, or the Excel
-  export button on any page — those still use the mock store and are unrelated to this.
+- Does not change the "AI Review" tab or the Excel export button on any page — those
+  still use the mock store and are unrelated to this. The document-upload flow *is* now
+  real for the four real funds (see "Uploading" above); it stays mock for every other
+  company.
 - Does not add authentication, retries, or a loading skeleton beyond a spinner and a
   plain "could not reach the backend" message. Good enough to demo; not production
   hardening.

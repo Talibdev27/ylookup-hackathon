@@ -207,7 +207,7 @@ See `docs/ARCHITECTURE.md` for how these actually connect, stage by stage.
 | `src/storage/` | Versioned SQLite archive of uploaded workbooks, extracted PDF pages and current check findings |
 | `tests/` | All suites, run together by `./run-tests.sh`. `tests/test_stages.py` carries a three-line fake `ReferenceLists`, so testing a stage needs no workbook |
 | `docs/` | The architecture, the roadmap, and the decision records. `counterparty-matching.md` and `deal-resolution.md` cover how the hard columns work and what was measured and rejected getting there; `where-the-points-go.md` accounts for every point the scoreboard does not give us; `FRONTEND-HANDOFF.md` is the JSON API contract for a separate frontend; `backend-integration.md` covers the `truss/` Next.js app that actually consumes it |
-| `truss/` | A Next.js frontend, three of its pages wired to the real backend above — see `docs/backend-integration.md` |
+| `truss/` | A Next.js frontend, four of its pages (including real uploads for the four real funds) wired to the real backend above — see `docs/backend-integration.md` |
 
 ## Requirements
 

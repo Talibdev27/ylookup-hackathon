@@ -668,29 +668,23 @@ def upload_form():
     )
 
 
-@app.post("/upload")
-def upload():
-    """Take this week's statements, and a reference workbook if one is not set up yet.
-
-    The pipeline runs synchronously: seven statements parse in a couple of seconds, and a
-    progress bar for a two-second job is a worse experience than waiting for it.
-    """
-    statements = [f for f in request.files.getlist("statements") if f.filename]
-    workbook = request.files.get("workbook")
+def _process_statement_upload(statements: list, workbook) -> tuple[dict | None, str | None]:
+    """Validate, save, and re-run the pipeline over a statement upload. Shared by the
+    HTML `/upload` route (a same-origin form post, redirected back to a Jinja page) and
+    the JSON `/api/upload` route (a cross-origin fetch() from `truss/`, which wants a
+    status and a result back, not a redirect to follow) -- one path validates and saves,
+    each caller decides how to respond."""
     has_workbook = bool(workbook and workbook.filename)
 
     if not statements:
-        return redirect(url_for("upload_form", error="Choose at least one bank statement to upload."))
+        return None, "Choose at least one bank statement to upload."
     bad = [f.filename for f in statements if not f.filename.lower().endswith(".pdf")]
     if bad:
-        return redirect(url_for("upload_form",
-                                error=f"Bank statements have to be PDFs. This one is not: {bad[0]}"))
+        return None, f"Bank statements have to be PDFs. This one is not: {bad[0]}"
     if has_workbook and not workbook.filename.lower().endswith((".xlsx", ".xlsm")):
-        return redirect(url_for("upload_form",
-                                error="The reference lists have to be an Excel file (.xlsx)."))
+        return None, "The reference lists have to be an Excel file (.xlsx)."
     if not has_workbook and workspace.current().workbook is None:
-        return redirect(url_for("upload_form",
-                                error="No reference lists are set up yet, so one has to be uploaded too."))
+        return None, "No reference lists are set up yet, so one has to be uploaded too."
 
     if has_workbook:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as staged:
@@ -705,8 +699,42 @@ def upload():
     try:
         rebuild()
     except (SystemExit, AssertionError, ValueError) as failure:
-        return redirect(url_for("upload_form", error=str(failure)))
+        return None, str(failure)
+
+    report = load_flag_report()
+    return {
+        "rows": len(load_rows()),
+        "checks_applied": report["checks_applied"],
+        "flags_found": report["flags_found"],
+    }, None
+
+
+@app.post("/upload")
+def upload():
+    """Take this week's statements, and a reference workbook if one is not set up yet.
+
+    The pipeline runs synchronously: seven statements parse in a couple of seconds, and a
+    progress bar for a two-second job is a worse experience than waiting for it.
+    """
+    statements = [f for f in request.files.getlist("statements") if f.filename]
+    workbook = request.files.get("workbook")
+    _, error = _process_statement_upload(statements, workbook)
+    if error:
+        return redirect(url_for("upload_form", error=error))
     return redirect(url_for("index"))
+
+
+@app.post("/api/upload")
+def api_upload():
+    """The same upload as `/upload`, for `truss/`'s own dropzone: a browser fetch() from
+    a separate origin wants JSON back, not a 302 to a page it would have to parse. Covered
+    by the `/api/` CORS prefix in `_allow_cross_origin_reads` above."""
+    statements = [f for f in request.files.getlist("statements") if f.filename]
+    workbook = request.files.get("workbook")
+    result, error = _process_statement_upload(statements, workbook)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"ok": True, **result})
 
 
 def rebuild() -> None:
@@ -734,6 +762,34 @@ def gl_upload_form():
     )
 
 
+def _process_gl_upload(gl_file, output_file) -> tuple[dict | None, str | None]:
+    """Validate, save, and re-run dataset 02's checks over a GL/loader upload. Shared by
+    the HTML `/gl-upload` route and the JSON `/api/gl-migration/upload` route, the same
+    split `_process_statement_upload` uses above."""
+    has_gl = bool(gl_file and gl_file.filename)
+    has_output = bool(output_file and output_file.filename)
+
+    if not has_gl and not has_output:
+        return None, "Choose at least one workbook to upload."
+    for label_text, upload_file, present in (
+        ("GL workbook", gl_file, has_gl),
+        ("loader workbook", output_file, has_output),
+    ):
+        if present and not upload_file.filename.lower().endswith((".xlsx", ".xlsm")):
+            return None, f"The {label_text} has to be an Excel file (.xlsx)."
+
+    gl_workspace.save(gl_file if has_gl else None, output_file if has_output else None)
+    try:
+        flags = run_gl_migration()
+    except FileNotFoundError as failure:
+        return None, str(failure)
+
+    by_check: dict[str, int] = {}
+    for flag in flags:
+        by_check[flag["check"]] = by_check.get(flag["check"], 0) + 1
+    return {"flags_found": len(flags), "by_check": by_check}, None
+
+
 @app.post("/gl-upload")
 def gl_upload():
     """Take this tranche's GL and/or loader workbook. Either alone is a real case --
@@ -741,26 +797,22 @@ def gl_upload():
     a GL already uploaded -- so both are optional, but at least one has to be present."""
     gl_file = request.files.get("gl")
     output_file = request.files.get("loader")
-    has_gl = bool(gl_file and gl_file.filename)
-    has_output = bool(output_file and output_file.filename)
-
-    if not has_gl and not has_output:
-        return redirect(url_for("gl_upload_form", error="Choose at least one workbook to upload."))
-    for label_text, upload_file, present in (
-        ("GL workbook", gl_file, has_gl),
-        ("loader workbook", output_file, has_output),
-    ):
-        if present and not upload_file.filename.lower().endswith((".xlsx", ".xlsm")):
-            return redirect(url_for(
-                "gl_upload_form", error=f"The {label_text} has to be an Excel file (.xlsx)."
-            ))
-
-    gl_workspace.save(gl_file if has_gl else None, output_file if has_output else None)
-    try:
-        run_gl_migration()
-    except FileNotFoundError as failure:
-        return redirect(url_for("gl_upload_form", error=str(failure)))
+    _, error = _process_gl_upload(gl_file, output_file)
+    if error:
+        return redirect(url_for("gl_upload_form", error=error))
     return redirect(url_for("gl_upload_form"))
+
+
+@app.post("/api/gl-migration/upload")
+def api_gl_migration_upload():
+    """The same upload as `/gl-upload`, returning JSON for `truss/`'s dropzone rather
+    than a redirect. Covered by the `/api/` CORS prefix."""
+    gl_file = request.files.get("gl")
+    output_file = request.files.get("loader")
+    result, error = _process_gl_upload(gl_file, output_file)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"ok": True, **result})
 
 
 @app.post("/reset")

@@ -300,6 +300,14 @@ other on whatever it already was — bundled sample or a previous upload) under
 against whichever pair is current, cached per distinct pair of files by resolved path and
 mtime so a fresh upload invalidates the cache without an explicit clear call.
 
+`/upload` and `/gl-upload` are same-origin form posts, redirected back to a Jinja page --
+fine for this app's own pages, useless to a fetch() from a different origin, which wants
+a status and a result, not a page to follow. `POST /api/upload` and
+`POST /api/gl-migration/upload` are JSON siblings of exactly the same validation and
+processing (`_process_statement_upload`, `_process_gl_upload` in `src/ui/app.py`),
+covered by the same `/api/*` CORS prefix as the review queue. `truss/`'s Documents tab
+uses these for the four real funds — see `docs/backend-integration.md`.
+
 **State is local files, not a managed service**, on purpose. `data/store.sqlite` keeps a
 content-hashed version history of uploaded workbooks and extracted PDF pages and mirrors
 the current check findings. `data/rows.json`, `data/flags.json`, `data/decisions.json`,
