@@ -67,6 +67,8 @@ export interface AiAnalysis {
   previousPeriodCompared: boolean;
   issues: AiIssue[];
   suggestions: string[];
+  /** Why nothing was extracted, when nothing was. Absent once a real reader exists. */
+  unavailableReason?: string;
 }
 
 export interface Document {
@@ -77,7 +79,9 @@ export interface Document {
   sourceFormat: SourceFormat;
   uploadedAt: string; // ISO date
   status: DocumentStatus;
-  aiConfidence: number; // 0-1
+  /** 0-1, and null when the document has not actually been read. A number here is a
+   *  claim about a real extraction -- never a placeholder. */
+  aiConfidence: number | null;
   sourceFileNote: string;
   reviewedBy?: string;
   reviewedAt?: string;

@@ -106,7 +106,8 @@ type DocumentRow = {
   source_format: Document["sourceFormat"];
   uploaded_at: string;
   status: DocumentStatus;
-  ai_confidence: number;
+  // null when the document was stored but never actually read -- see finishProcessing.
+  ai_confidence: number | null;
   source_file_note: string;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -318,46 +319,42 @@ export async function finishProcessing(documentId: string): Promise<Document | u
   const doc = await getDocument(documentId);
   if (!doc) return undefined;
 
-  const current = `Period ending ${doc.uploadedAt}`;
-  const previous = "Prior period";
-  const metrics = STATEMENT_METRICS[doc.statementKind];
-  const base = 200000 + Math.round(Math.random() * 800000);
-
-  const lines = metrics.map((metric, i) => {
-    const prevVal = Math.round(base * (0.85 + i * 0.05));
-    const curVal = Math.round(prevVal * (0.95 + Math.random() * 0.2));
-    return { metric, values: { [current]: curVal, [previous]: prevVal } };
-  });
-  const statement: FinancialStatement = {
-    kind: doc.statementKind,
-    periods: [current, previous],
-    lines,
+  // Nothing here reads the uploaded file. There is no OCR, no model, and no parser for
+  // balance sheets, income statements or cash flow statements -- and the hackathon
+  // dataset contains no such documents to build one against.
+  //
+  // This used to invent the answer: every figure came from Math.random(), the issue list
+  // was a 40% coin flip, and aiConfidence was 0.9 + random()*0.09, reported alongside
+  // `documentAnalysed: true`. Uploading the same file twice produced different accounts,
+  // and a four-byte file came back "verified" at 98% confidence.
+  //
+  // That is the exact failure this product argues against, and the Python side already
+  // set the precedent: /api/companies/<id>/cash-flow returns `available: false` with a
+  // reason rather than fabricating the three activity totals. So does this. The document
+  // is stored and listed; what it says is left blank until something can actually read it.
+  const analysis: AiAnalysis = {
+    documentAnalysed: false,
+    numbersExtracted: false,
+    previousPeriodCompared: false,
+    issues: [],
+    suggestions: [],
+    unavailableReason:
+      "This document was stored but not read. TRUSS cannot yet extract figures from " +
+      "balance sheets, income statements or cash flow statements, so nothing has been " +
+      "filled in for it. The company-level statements in this workspace come from the " +
+      "ledger, not from uploads.",
   };
 
-  const flagged = Math.random() < 0.4;
-  const analysis: AiAnalysis = {
-    documentAnalysed: true,
-    numbersExtracted: true,
-    previousPeriodCompared: true,
-    issues: flagged
-      ? [
-          {
-            id: `issue-${documentId}-1`,
-            title: `${lines[0].metric} moved sharply`,
-            detail: `${lines[0].metric} changed more than expected versus the prior period. Review supporting documentation.`,
-            severity: "warn" as const,
-          },
-        ]
-      : [],
-    suggestions: flagged
-      ? ["Compare against the previous period", "Confirm the underlying source document"]
-      : ["No unusual movement detected"],
+  const statement: FinancialStatement = {
+    kind: doc.statementKind,
+    periods: [],
+    lines: [],
   };
 
   const updated: Document = {
     ...doc,
-    aiConfidence: 0.9 + Math.random() * 0.09,
-    status: flagged ? "needs_review" : "verified",
+    aiConfidence: null,
+    status: "needs_review",
   };
 
   const client = db();

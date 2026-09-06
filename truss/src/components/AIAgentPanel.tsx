@@ -9,10 +9,20 @@ export function AIAgentPanel({ analysis }: { analysis: AiAnalysis }) {
     <div className="rounded-2xl border border-line bg-white p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">AI Agent</h2>
-        <span className="flex items-center gap-1.5 text-xs text-good">
-          <span className="h-1.5 w-1.5 rounded-full bg-good" /> Monitoring
-        </span>
+        {analysis.unavailableReason ? (
+          <span className="text-xs text-ink-soft">Not run</span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-xs text-good">
+            <span className="h-1.5 w-1.5 rounded-full bg-good" /> Monitoring
+          </span>
+        )}
       </div>
+
+      {analysis.unavailableReason && (
+        <p className="mt-3 rounded-xl border border-line bg-canvas p-3 text-xs leading-relaxed text-ink-soft">
+          {analysis.unavailableReason}
+        </p>
+      )}
 
       <h3 className="mt-4 text-xs font-medium uppercase tracking-wide text-ink-soft">Analysis</h3>
       <ul className="mt-2 space-y-1.5">

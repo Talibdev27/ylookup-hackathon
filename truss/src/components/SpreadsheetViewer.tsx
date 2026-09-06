@@ -27,7 +27,11 @@ export function SpreadsheetViewer({
           <span className="text-sm font-medium text-ink">{current.name}</span>
           <StatusBadge status={current.status} />
           <span>Uploaded {formatDate(current.uploadedAt)}</span>
-          <span>AI confidence {formatConfidence(current.aiConfidence)}</span>
+          {current.aiConfidence === null ? (
+            <span>Not analysed</span>
+          ) : (
+            <span>AI confidence {formatConfidence(current.aiConfidence)}</span>
+          )}
           {current.reviewedBy && (
             <span>
               Reviewed by {current.reviewedBy} · {current.reviewedAt ? formatDate(current.reviewedAt) : ""}
