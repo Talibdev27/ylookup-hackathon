@@ -20,11 +20,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.checks.contract import Flag
 from src.gl_migration import analyze, load
 
-# Loaded once at module scope -- the GL sheet alone takes several seconds to parse, and
-# every test below needs the same data.
-GL = load.load_source_gl()
-SHEETS = load.load_output_workbook()
-UPLOAD = SHEETS[load.UPLOAD_SHEET]
+# Dataset 02 is not bundled with the repo, so a clone without it is the normal case for
+# anybody but us. Loading at module scope used to crash on import, and `run-tests.sh`
+# stops on the first failing suite -- so one missing folder took every later suite down
+# with it and "all suites pass" never printed.
+AVAILABLE = load.available()
+
+if AVAILABLE:
+    # Loaded once at module scope -- the GL sheet alone takes several seconds to parse,
+    # and every test below needs the same data.
+    GL = load.load_source_gl()
+    SHEETS = load.load_output_workbook()
+    UPLOAD = SHEETS[load.UPLOAD_SHEET]
 
 
 def test_missing_legal_entities_matches_verified_count() -> None:
@@ -97,10 +104,10 @@ def test_analyze_returns_every_flag_type() -> None:
 
 
 if __name__ == "__main__":
-    test_missing_legal_entities_matches_verified_count()
-    test_missing_deals_matches_verified_count()
-    test_missing_investors_matches_verified_count()
-    test_mapping_gaps_surfaces_every_administered_row()
-    test_entity_totals_tie_between_gl_and_upload_template()
-    test_analyze_returns_every_flag_type()
-    print("all gl_migration checks pass")
+    if not AVAILABLE:
+        print(f"dataset 02 not found at {load.DATA_ROOT} -- skipping the GL migration checks")
+        raise SystemExit(0)
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_"):
+            fn()
+    print("all GL migration checks pass")
