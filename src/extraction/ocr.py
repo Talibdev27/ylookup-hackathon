@@ -14,18 +14,30 @@ photographed document shows up: rasterise the page and read the pixels instead.
 
 `available()` checks for that binary at runtime, so a missing install degrades to "no
 OCR happened" rather than a stack trace three calls deep -- see how `pdf_text.extract()`
-uses it.
+uses it. The wrapper package is treated the same way, for the same reason: it is imported
+here and nowhere else, and `pdf_text` imports this module unconditionally, so an
+unguarded import would put the whole review queue behind a pip install that exists only
+for a fallback this dataset never reaches.
 """
 from __future__ import annotations
 
-import pytesseract
+try:
+    import pytesseract
+except ImportError:  # the wrapper is not installed; same outcome as a missing binary
+    pytesseract = None
 
 _RESOLUTION = 300  # dpi. Tesseract's own docs recommend 300 as the accuracy/speed floor.
 
 
 def available() -> bool:
-    """Whether the tesseract binary is actually installed and callable, not just whether
-    the `pytesseract` package is importable -- those are two different things."""
+    """Whether OCR can actually run: the wrapper importable *and* the binary callable.
+
+    Those are two different things and either can be missing on its own -- the package is
+    pure Python and installs anywhere, the binary is a system install that most
+    deployment images do not carry.
+    """
+    if pytesseract is None:
+        return False
     try:
         pytesseract.get_tesseract_version()
         return True
@@ -41,9 +53,10 @@ def extract_page_image(page) -> str:
     reopen the file per page.
     """
     if not available():
+        missing = "the pytesseract package" if pytesseract is None else "the tesseract binary"
         raise RuntimeError(
-            "the tesseract binary is not installed or not on PATH -- "
-            "see this module's docstring for how to install it"
+            f"{missing} is not installed -- see this module's docstring for how to "
+            "install it"
         )
     image = page.to_image(resolution=_RESOLUTION).original
     return pytesseract.image_to_string(image)
