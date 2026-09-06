@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       ? (statementKindField as Document["statementKind"])
       : guessStatementKind(file.name);
 
-  const doc = createUploadedDocument({
+  const doc = await createUploadedDocument({
     companyId,
     name: file.name.replace(/\.[^.]+$/, ""),
     sourceFormat,
@@ -56,11 +56,11 @@ export async function POST(req: Request) {
   });
 
   await sleep(1400);
-  finishProcessing(doc.id);
+  await finishProcessing(doc.id);
 
   return NextResponse.json({
     document: doc,
-    statement: getStatement(doc.id),
-    analysis: getAnalysis(doc.id),
+    statement: await getStatement(doc.id),
+    analysis: await getAnalysis(doc.id),
   });
 }

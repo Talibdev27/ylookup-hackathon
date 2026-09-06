@@ -15,12 +15,12 @@ export default async function DocumentPage({
   params: Promise<{ documentId: string }>;
 }) {
   const { documentId } = await params;
-  const doc = getDocument(documentId);
+  const doc = await getDocument(documentId);
   if (!doc) notFound();
 
   const company = getCompany(doc.companyId);
-  const statement = getStatement(documentId);
-  const analysis = getAnalysis(documentId);
+  const statement = await getStatement(documentId);
+  const analysis = await getAnalysis(documentId);
 
   return (
     <div className="flex min-h-screen flex-col">

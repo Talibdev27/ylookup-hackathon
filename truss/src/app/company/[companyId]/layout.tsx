@@ -19,10 +19,10 @@ export default async function CompanyLayout({
   const company = getCompany(companyId);
   if (!company) notFound();
 
-  const documents = listDocumentsForCompany(companyId);
+  const documents = await listDocumentsForCompany(companyId);
   const featured = documents.find((d) => d.status === "needs_review" || d.status === "critical") ?? documents[0];
   const analysis = featured
-    ? getAnalysis(featured.id)
+    ? await getAnalysis(featured.id)
     : { documentAnalysed: false, numbersExtracted: false, previousPeriodCompared: false, issues: [], suggestions: [] };
 
   return (

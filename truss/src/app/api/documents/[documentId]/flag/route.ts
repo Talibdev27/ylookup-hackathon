@@ -7,11 +7,11 @@ export async function POST(
   { params }: { params: Promise<{ documentId: string }> }
 ) {
   const { documentId } = await params;
-  if (!getDocument(documentId)) {
+  if (!await getDocument(documentId)) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
   const body = await req.json().catch(() => ({}));
   const reviewedBy = typeof body?.reviewedBy === "string" ? body.reviewedBy : "Reviewer";
-  const doc = setDocumentStatus(documentId, "critical", reviewedBy);
+  const doc = await setDocumentStatus(documentId, "critical", reviewedBy);
   return NextResponse.json(doc);
 }

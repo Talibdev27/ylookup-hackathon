@@ -7,11 +7,11 @@ export async function GET(
   { params }: { params: Promise<{ documentId: string }> }
 ) {
   const { documentId } = await params;
-  const doc = getDocument(documentId);
+  const doc = await getDocument(documentId);
   if (!doc) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
-  const statement = getStatement(documentId);
+  const statement = await getStatement(documentId);
   if (!statement) {
     return NextResponse.json({ error: "No structured data for this document yet" }, { status: 404 });
   }

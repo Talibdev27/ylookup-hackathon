@@ -9,8 +9,8 @@ export default async function CompanyOverviewPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const doc = listDocumentsForCompany(companyId)[0];
-  const statement = doc ? getStatement(doc.id) : undefined;
+  const doc = (await listDocumentsForCompany(companyId))[0];
+  const statement = doc ? await getStatement(doc.id) : undefined;
 
   if (!doc || !statement) return <EmptyStatement label="spreadsheet" companyId={companyId} />;
 
