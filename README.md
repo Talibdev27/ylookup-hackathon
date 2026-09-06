@@ -35,6 +35,11 @@ acknowledge, resolve, or say the machine is right to be unsure.
 - **Live:** <https://ylookup-hackathon.onrender.com/>
   *(free tier — it sleeps after 15 minutes, so the first load takes 30–60 seconds)*
 
+`data/rows.json` is committed, which is unusual for generated output and deliberate: the
+free tier has no persistent disk, so without it a restart leaves the deployed app with an
+empty queue and nothing to show. The dataset it is built from is the client's and is not
+redistributed here — delete the file and run `./run.sh` to rebuild it from your own copy.
+
 Or locally, from a clean clone:
 
 ```bash

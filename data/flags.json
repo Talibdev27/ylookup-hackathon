@@ -1,0 +1,459 @@
+{
+  "checks_total": 6,
+  "checks_applied": [
+    "balance_continuity",
+    "duplicate_transaction",
+    "round_number_amount",
+    "currency_mismatch",
+    "journal_batch_integrity",
+    "reference_list_quality"
+  ],
+  "check_failures": {},
+  "flags_found": 35,
+  "flags": [
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-524291-030: this transaction's amount, 4,232,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_ABF_I_SCSP_CALDER_EUR_0894.pdf",
+        "page": 1,
+        "row_id": 3
+      },
+      "expected": null,
+      "actual": 4232000.0,
+      "flag_id": "9f115db3b09a02971501ee81"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-524291-030: this transaction's amount, -180,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_ABF_I_SCSP_CALDER_EUR_0894.pdf",
+        "page": 2,
+        "row_id": 10
+      },
+      "expected": null,
+      "actual": -180000.0,
+      "flag_id": "f8d7da62aa2a9ded83e299fb"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-524291-030: this transaction's amount, -20,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_ABF_I_SCSP_CALDER_EUR_0894.pdf",
+        "page": 2,
+        "row_id": 11
+      },
+      "expected": null,
+      "actual": -20000.0,
+      "flag_id": "137a8f7d6abac2ea982109de"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-149813-030: this transaction's amount, -4,232,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_A_B__FUND_II_CALDER_EUR_8102.pdf",
+        "page": 1,
+        "row_id": 29
+      },
+      "expected": null,
+      "actual": -4232000.0,
+      "flag_id": "67b0dec4ac2f16847c7eb986"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-149813-030: this transaction's amount, 6,550,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_A_B__FUND_II_CALDER_EUR_8102.pdf",
+        "page": 1,
+        "row_id": 30
+      },
+      "expected": null,
+      "actual": 6550000.0,
+      "flag_id": "cd017da6a44f2b60c39e4b32"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-149813-030: this transaction's amount, 4,200,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_A_B__FUND_II_CALDER_EUR_8102.pdf",
+        "page": 2,
+        "row_id": 38
+      },
+      "expected": null,
+      "actual": 4200000.0,
+      "flag_id": "692263258b71c2fe1f69e133"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-149813-030: this transaction's amount, -5,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_A_B__FUND_II_CALDER_EUR_8102.pdf",
+        "page": 2,
+        "row_id": 39
+      },
+      "expected": null,
+      "actual": -5000.0,
+      "flag_id": "821651afeca225f4e3844dc1"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -40,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 1,
+        "row_id": 44
+      },
+      "expected": null,
+      "actual": -40000.0,
+      "flag_id": "9d720693c14632bc19862283"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -85,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 1,
+        "row_id": 46
+      },
+      "expected": null,
+      "actual": -85000.0,
+      "flag_id": "3715d51dda5fb752a90843db"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -750,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 1,
+        "row_id": 48
+      },
+      "expected": null,
+      "actual": -750000.0,
+      "flag_id": "e8c0027ef6b7b2fda919c52d"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -736,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 2,
+        "row_id": 52
+      },
+      "expected": null,
+      "actual": -736000.0,
+      "flag_id": "e24757f1bab4e774e9ce2a4f"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -10,000,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 2,
+        "row_id": 53
+      },
+      "expected": null,
+      "actual": -10000000.0,
+      "flag_id": "8aa556847dc8454e4eec5087"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -20,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 2,
+        "row_id": 56
+      },
+      "expected": null,
+      "actual": -20000.0,
+      "flag_id": "42a0751d60de9255b2a132af"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-644826-130: this transaction's amount, -260,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_GMF_II_SCSP_CALDER_USD_4373.pdf",
+        "page": 2,
+        "row_id": 58
+      },
+      "expected": null,
+      "actual": -260000.0,
+      "flag_id": "9cfec030dcedd4a83c823e24"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-135: this transaction's amount, 4,000,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_DKK_0541.pdf",
+        "page": 1,
+        "row_id": 63
+      },
+      "expected": null,
+      "actual": 4000000.0,
+      "flag_id": "34a5025f81e7fedb409204da"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-135: this transaction's amount, -75,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_DKK_0541.pdf",
+        "page": 1,
+        "row_id": 65
+      },
+      "expected": null,
+      "actual": -75000.0,
+      "flag_id": "604ed6b14a78308b6bbac638"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-030: this transaction's amount, -9,400,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_EUR_030041.pdf",
+        "page": 1,
+        "row_id": 71
+      },
+      "expected": null,
+      "actual": -9400000.0,
+      "flag_id": "03d4d4a66dbe52bc1ccf94dd"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-030: this transaction's amount, 29,700,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_EUR_030041.pdf",
+        "page": 1,
+        "row_id": 72
+      },
+      "expected": null,
+      "actual": 29700000.0,
+      "flag_id": "0e9742e1d6412659f4fdaf90"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-030: this transaction's amount, -2,000,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_EUR_030041.pdf",
+        "page": 2,
+        "row_id": 74
+      },
+      "expected": null,
+      "actual": -2000000.0,
+      "flag_id": "8479c8bda7aadd0a8cf00657"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-030: this transaction's amount, -20,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_EUR_030041.pdf",
+        "page": 2,
+        "row_id": 80
+      },
+      "expected": null,
+      "actual": -20000.0,
+      "flag_id": "f87c17eaafa73382bb82941f"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-030: this transaction's amount, -20,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_EUR_030041.pdf",
+        "page": 3,
+        "row_id": 82
+      },
+      "expected": null,
+      "actual": -20000.0,
+      "flag_id": "668a9bb543326f1ef40a911b"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-132: this transaction's amount, -610,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_GBP_3252.pdf",
+        "page": 1,
+        "row_id": 88
+      },
+      "expected": null,
+      "actual": -610000.0,
+      "flag_id": "bf45cc5b1445f45dd1e74a71"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-132: this transaction's amount, 16,900,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_GBP_3252.pdf",
+        "page": 1,
+        "row_id": 89
+      },
+      "expected": null,
+      "actual": 16900000.0,
+      "flag_id": "26bb31c83545f9b1ddfcdaf7"
+    },
+    {
+      "check": "round_number",
+      "severity": "info",
+      "message": "account 240-222731-132: this transaction's amount, 2,100,000.00, is a round multiple of 1,000 -- worth a glance in case it is an estimate rather than an invoiced figure",
+      "source": {
+        "pdf": "20260331_NI_V_SCSP_CALDER_GBP_3252.pdf",
+        "page": 2,
+        "row_id": 98
+      },
+      "expected": null,
+      "actual": 2100000.0,
+      "flag_id": "7b2886b235485e1fd4e0428a"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund I Non-SRT AIV SCSp' is a token subset of 'NORDVIK INFRASTRUCTURE GREEN CREDIT FUND I NON-SRT AIV SCSp - Eliminations' (91% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund I Non-SRT AIV SCSp",
+        "longer": "NORDVIK INFRASTRUCTURE GREEN CREDIT FUND I NON-SRT AIV SCSp - Eliminations"
+      },
+      "expected": null,
+      "actual": 0.9091,
+      "flag_id": "27b106666bf987ee8ed587ea"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp - Elimination' (92% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9167,
+      "flag_id": "66d72faeaa84823d918ea78c"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp' (91% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp"
+      },
+      "expected": null,
+      "actual": 0.9091,
+      "flag_id": "86d5f67d0ccb3874f9b72957"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp - Elimination' is a token subset of 'Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp - Elimination' (92% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp - Elimination",
+        "longer": "Nordvik Infrastructure Green Credit Fund II EUR Non-US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9167,
+      "flag_id": "b3b10ebf88d3da3570a44563"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp - Elimination' (91% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II EUR US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9091,
+      "flag_id": "297a2ba5710477859187a7c9"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp - Elimination' (90% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9,
+      "flag_id": "e92759744c1ec6394cfcff45"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD SCSp - Elimination' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp - Elimination' (90% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD SCSp - Elimination",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD Blocked SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9,
+      "flag_id": "3ec9943caaae22ca0ba2a04d"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp - Elimination' (92% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9167,
+      "flag_id": "43ae6e50d538b98dbc03c016"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp' (91% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp"
+      },
+      "expected": null,
+      "actual": 0.9091,
+      "flag_id": "77600cc1d364a0dc32fcc941"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp - Elimination' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp - Elimination' (92% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp - Elimination",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD Non-US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9167,
+      "flag_id": "bc935424e351f86e872bfdbf"
+    },
+    {
+      "check": "legal_entity_near_duplicate",
+      "severity": "review",
+      "message": "'Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp' is a token subset of 'Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp - Elimination' (91% overlap) -- confirm these are two different legal entities, not one entity entered inconsistently",
+      "source": {
+        "shorter": "Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp",
+        "longer": "Nordvik Infrastructure Green Credit Fund II USD US Blocker SCSp - Elimination"
+      },
+      "expected": null,
+      "actual": 0.9091,
+      "flag_id": "4f018d8aa8d34b886483c770"
+    }
+  ]
+}

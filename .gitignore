@@ -7,6 +7,11 @@ venv/
 data/*.sqlite
 data/*.json
 !data/.gitkeep
+# ...except the built sample queue. Render's free tier has no persistent disk, so a
+# restart wipes anything uploaded and the deployed app comes back with an empty queue.
+# Shipping the built rows means a cold boot always has the sample to show.
+!data/rows.json
+!data/flags.json
 node_modules/
 data/decisions.json
 data/workspace/
