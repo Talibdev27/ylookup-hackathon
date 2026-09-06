@@ -10,5 +10,5 @@ export async function GET(
   if (!getCompany(companyId)) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }
-  return NextResponse.json({ documents: listDocumentsForCompany(companyId) });
+  return NextResponse.json({ documents: await listDocumentsForCompany(companyId) });
 }

@@ -32,8 +32,8 @@ export default async function IncomeStatementPage({
     );
   }
 
-  const doc = getLatestDocumentOfKind(companyId, "income_statement");
-  const statement = doc ? getStatement(doc.id) : undefined;
+  const doc = await getLatestDocumentOfKind(companyId, "income_statement");
+  const statement = doc ? await getStatement(doc.id) : undefined;
 
   if (!doc || !statement) return <EmptyStatement label="income statement" companyId={companyId} />;
 

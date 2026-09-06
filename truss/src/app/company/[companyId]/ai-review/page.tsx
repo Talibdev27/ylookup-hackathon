@@ -9,10 +9,13 @@ export default async function AiReviewPage({
   params: Promise<{ companyId: string }>;
 }) {
   const { companyId } = await params;
-  const documents = listDocumentsForCompany(companyId);
-  const withIssues = documents
-    .map((doc) => ({ doc, analysis: getAnalysis(doc.id) }))
-    .filter((d) => d.analysis.issues.length > 0);
+  const documents = await listDocumentsForCompany(companyId);
+  // One round trip per document rather than a sequential await inside a map: the
+  // analyses do not depend on each other, so there is no reason to queue them.
+  const analysed = await Promise.all(
+    documents.map(async (doc) => ({ doc, analysis: await getAnalysis(doc.id) })),
+  );
+  const withIssues = analysed.filter((d) => d.analysis.issues.length > 0);
 
   if (withIssues.length === 0) {
     return (

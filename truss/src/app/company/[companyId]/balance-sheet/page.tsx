@@ -35,8 +35,8 @@ export default async function BalanceSheetPage({
     );
   }
 
-  const doc = getLatestDocumentOfKind(companyId, "balance_sheet");
-  const statement = doc ? getStatement(doc.id) : undefined;
+  const doc = await getLatestDocumentOfKind(companyId, "balance_sheet");
+  const statement = doc ? await getStatement(doc.id) : undefined;
 
   if (!doc || !statement) return <EmptyStatement label="balance sheet" companyId={companyId} />;
 

@@ -32,8 +32,8 @@ export default async function CashFlowPage({
     );
   }
 
-  const doc = getLatestDocumentOfKind(companyId, "cash_flow");
-  const statement = doc ? getStatement(doc.id) : undefined;
+  const doc = await getLatestDocumentOfKind(companyId, "cash_flow");
+  const statement = doc ? await getStatement(doc.id) : undefined;
 
   if (!doc || !statement) return <EmptyStatement label="cash flow statement" companyId={companyId} />;
 

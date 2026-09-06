@@ -7,9 +7,9 @@ export async function GET(
   { params }: { params: Promise<{ documentId: string }> }
 ) {
   const { documentId } = await params;
-  const doc = getDocument(documentId);
+  const doc = await getDocument(documentId);
   if (!doc) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
-  return NextResponse.json(getAnalysis(documentId));
+  return NextResponse.json(await getAnalysis(documentId));
 }
