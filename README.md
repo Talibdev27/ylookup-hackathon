@@ -32,6 +32,7 @@ acknowledge, resolve, or say the machine is right to be unsure.
 
 ## Try it
 
+- **Video:** <https://www.loom.com/share/42e38870ec5349729dc1aa1b26c958c1>
 - **Live:** <https://ylookup-hackathon.onrender.com/>
   *(free tier — it sleeps after 15 minutes, so the first load takes 30–60 seconds)*
 
